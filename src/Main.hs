@@ -13,15 +13,15 @@ import System.FilePath
 import System.Process
 
 data Command
-  = Refresh [FilePath]
+  = Pull [FilePath]
 
 cmdParser :: Parser Command
 cmdParser = subparser
-  ( command "refresh" (info (refreshOptions <**> helper) (progDesc "Pull everything"))
+  ( command "pull" (info (pullOptions <**> helper) (progDesc "Pull everything"))
   )
 
-refreshOptions :: Parser Command
-refreshOptions = Refresh
+pullOptions :: Parser Command
+pullOptions = Pull
   <$> many (argument str (metavar "PACKAGE..."))
 
 main :: IO ()
@@ -37,10 +37,10 @@ main = execParser opts >>= travisMaintenance
 travisMaintenance :: Command -> IO ()
 travisMaintenance cmd =
   case cmd of
-    Refresh pkgs -> refresh pkgs
+    Pull pkgs -> pull pkgs
 
-refresh :: [FilePath] -> IO ()
-refresh pkgs =
+pull :: [FilePath] -> IO ()
+pull pkgs =
   inCheckoutDir $ \dir ->
   for_ repos $ \r -> do
     let repoSuffix = fullRepoName r
