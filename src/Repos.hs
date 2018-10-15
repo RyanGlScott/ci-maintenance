@@ -1,15 +1,23 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Repos where
 
-import Data.Text (Text)
+import qualified Data.Set as Set
+import           Data.Set (Set)
+import           Data.Text (Text, unpack)
+import           System.FilePath
 
 data Repo = Repo
   { repoOwner :: !Text
   , repoName  :: !Text
   } deriving (Eq, Ord, Read, Show)
 
-repos :: [Repo]
-repos = concat
+fullRepoName :: Repo -> String
+fullRepoName Repo{repoOwner, repoName} =
+  unpack repoOwner </> unpack repoName
+
+repos :: Set Repo
+repos = Set.fromList $ concat
   [ map (Repo "ekmett")
     [ "ad"
     , "adjunctions"
