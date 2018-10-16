@@ -21,25 +21,45 @@ import           System.Process
 
 data Command
   = Pull [FilePath]
+  | Reset [FilePath]
   | TestedWith [FilePath]
+  | Everything [FilePath]
+  | Clean
+  deriving (Eq, Ord, Read, Show)
 
 cmdParser :: Parser Command
 cmdParser = subparser
   ( command "pull"
       (info (pullOptions <**> helper)
             (progDesc "Pull everything"))
+ <> command "reset"
+      (info (resetOptions <**> helper)
+            (progDesc "Reset working changes"))
  <> command "tested-with"
       (info (testedWithOptions <**> helper)
             (progDesc "Updated tested-with stanzas"))
+ <> command "everything"
+      (info (everythingOptions <**> helper)
+            (progDesc "Fully update each library"))
+ <> command "clean"
+      (info (pure Clean <**> helper)
+            (progDesc "Clean working directory"))
   )
 
 pullOptions :: Parser Command
-pullOptions = Pull
-  <$> many (argument str (metavar "PACKAGE..."))
+pullOptions = Pull <$> manyPackages
+
+resetOptions :: Parser Command
+resetOptions = Reset <$> manyPackages
 
 testedWithOptions :: Parser Command
-testedWithOptions = TestedWith
-  <$> many (argument str (metavar "PACKAGE..."))
+testedWithOptions = TestedWith <$> manyPackages
+
+everythingOptions :: Parser Command
+everythingOptions = Everything <$> manyPackages
+
+manyPackages :: Parser [FilePath]
+manyPackages = many $ argument str $ metavar "PACKAGE..."
 
 main :: IO ()
 main = execParser opts >>= travisMaintenance
@@ -54,11 +74,14 @@ main = execParser opts >>= travisMaintenance
 travisMaintenance :: Command -> IO ()
 travisMaintenance cmd =
   case cmd of
-    Pull pkgs -> pull pkgs
-    TestedWith pkgs -> testedWith pkgs
+    Pull pkgs       -> perPackageAction pkgs (const pull)
+    Reset pkgs      -> perPackageAction pkgs (const reset)
+    TestedWith pkgs -> perPackageAction pkgs testedWith
+    Everything pkgs -> perPackageAction pkgs everything
+    Clean           -> removeDirectoryRecursive =<< getCheckoutDir
 
-pull :: [FilePath] -> IO ()
-pull pkgs =
+perPackageAction :: [FilePath] -> (FilePath -> IO ()) -> IO ()
+perPackageAction pkgs thing =
   inCheckoutDir $ \dir ->
   for_ repos $ \r -> do
     let repoSuffix = fullRepoName r
@@ -73,34 +96,30 @@ pull pkgs =
                           ]
       bracket_ (setCurrentDirectory repoDir)
                (setCurrentDirectory dir)
-               (callProcess "git" ["pull"])
+               (thing repoDir)
 
-testedWith :: [FilePath] -> IO ()
-testedWith pkgs =
-  inCheckoutDir $ \dir ->
-  for_ repos $ \r -> do
-    let repoSuffix = fullRepoName r
-        repoDir    = dir </> repoSuffix
-    when (null pkgs || any (`isInfixOf` repoDir) pkgs) $ do
-      exists <- doesDirectoryExist repoDir
-      when exists $ do
-        bracket_ (setCurrentDirectory repoDir)
-                 (setCurrentDirectory dir)
-                 (go repoDir)
+pull :: IO ()
+pull = callProcess "git" ["pull"]
+
+reset :: IO ()
+reset = callProcess "git" [ "reset"
+                          , "--hard"
+                          , "HEAD"
+                          ]
+
+testedWith :: FilePath -> IO ()
+testedWith fp = do
+  let path = "cabal.project"
+  contents <- TS.unpack <$> TS.readFile path
+  pf <- either fail pure $ parseProjectFile path contents
+  for_ (prjPackages pf) $ \package -> do
+    let cabalFileDir = fp </> package
+    cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
+                  listDirectory cabalFileDir
+    case cabalFiles of
+      [cabalFile] -> replaceTestedWith (cabalFileDir </> cabalFile)
+      _           -> fail $ show cabalFiles
   where
-    go :: FilePath -> IO ()
-    go fp = do
-      let path = "cabal.project"
-      contents <- TS.unpack <$> TS.readFile path
-      pf <- either fail pure $ parseProjectFile path contents
-      for_ (prjPackages pf) $ \package -> do
-        let cabalFileDir = fp </> package
-        cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
-                      listDirectory cabalFileDir
-        case cabalFiles of
-          [cabalFile] -> replaceTestedWith (cabalFileDir </> cabalFile)
-          _           -> fail $ show cabalFiles
-
     replaceTestedWith :: FilePath -> IO ()
     replaceTestedWith cabalFilePath = do
       cabalFileContents <- TS.unpack <$> TS.readFile cabalFilePath
@@ -125,14 +144,24 @@ testedWith pkgs =
         Just ver -> prettyShow ver
         Nothing -> error $ show (prim, sec)
 
+everything :: FilePath -> IO ()
+everything fp = do
+  pull
+  testedWith fp
+
 inCheckoutDir :: (FilePath -> IO a) -> IO a
 inCheckoutDir thing = do
   cwd <- getCurrentDirectory
-  let checkoutDir = cwd </> "checkout"
+  checkoutDir <- getCheckoutDir
   createDirectoryIfMissing True checkoutDir
   bracket_ (setCurrentDirectory checkoutDir)
            (setCurrentDirectory cwd)
            (thing checkoutDir)
+
+getCheckoutDir :: IO FilePath
+getCheckoutDir = do
+  cwd <- getCurrentDirectory
+  pure $ cwd </> "checkout"
 
 supportedGhcVersions :: Map (String, String) Version
 supportedGhcVersions =
