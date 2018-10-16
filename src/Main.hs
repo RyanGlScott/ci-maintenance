@@ -14,7 +14,9 @@ import           Data.Map.Strict (Map)
 import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
 import           Data.Traversable
+import           Distribution.PackageDescription.Parsec
 import           Distribution.Pretty (prettyShow)
+import           Distribution.Verbosity (normal)
 import           Distribution.Version
 import           Options.Applicative
 import           System.Directory
@@ -107,15 +109,20 @@ perPackageAction pkgs thing =
                (do let path = "cabal.project"
                    contents <- TS.unpack <$> TS.readFile path
                    pf <- either fail pure $ parseProjectFile path contents
-                   componentNames <-
+                   components <-
                      for (prjPackages pf) $ \package -> do
                        let cabalFileDir = repoDir </> package
                        cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
                                      listDirectory cabalFileDir
                        case cabalFiles of
-                         [cabalFile] -> pure $ takeBaseName cabalFile
-                         _           -> fail $ show cabalFiles
-                   thing (RM r pf componentNames) repoDir)
+                         [cabalFile] -> do
+                           gpd <- readGenericPackageDescription
+                                    normal (cabalFileDir </> cabalFile)
+                           pure Component{ compName = takeBaseName cabalFile
+                                         , compGpd  = gpd
+                                         }
+                         _ -> fail $ show cabalFiles
+                   thing (RM r pf components) repoDir)
 
 cloneRepo :: String -> FilePath -> IO ()
 cloneRepo name repoDir = do
@@ -172,7 +179,7 @@ testedWith (RM _ pf _) fp = do
         Nothing -> error $ show (prim, sec)
 
 regenerate :: RepoMetadata -> FilePath -> IO ()
-regenerate rap fp = do
+regenerate rm fp = do
   let travisYml     = fp </> ".travis.yml"
       haskellCIDir  = "../../../haskell-ci"
                       -- TODO: Better path handling here
@@ -190,7 +197,7 @@ regenerate rap fp = do
                     , travisYml
                     ]
   travisYmlContents <- TS.unpack <$> TS.readFile travisYml
-  let mbTravisYmlContents' = applyHacks rap travisYmlContents
+  let mbTravisYmlContents' = applyHacks rm travisYmlContents
   case mbTravisYmlContents' of
     Nothing -> putStrLn "No hacks applied."
     Just travisYmlContents' -> do

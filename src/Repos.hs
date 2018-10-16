@@ -7,6 +7,7 @@ import           CabalProjectParser
 import qualified Data.Set as Set
 import           Data.Set (Set)
 import           Data.Text (Text, unpack)
+import           Distribution.PackageDescription (GenericPackageDescription)
 import           System.FilePath
 
 data Repo = Repo
@@ -17,8 +18,13 @@ data Repo = Repo
 data RepoMetadata = RM
   { rmRepo           :: !Repo
   , rmProject        :: !Project
-  , rmComponentNames :: ![String]
-  } deriving (Eq, Ord, Read, Show)
+  , rmComponentNames :: ![Component]
+  }
+
+data Component = Component
+  { compName :: !String
+  , compGpd  :: !GenericPackageDescription
+  }
 
 fullRepoName :: Repo -> String
 fullRepoName Repo{repoOwner, repoName} =

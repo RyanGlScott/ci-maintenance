@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Hacks where
 
@@ -8,6 +9,10 @@ import           Data.Foldable
 import           Data.List
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
+import qualified Distribution.PackageDescription as PD
+import           Distribution.PackageDescription (GenericPackageDescription)
+import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
+import           Distribution.Text (display)
 
 data Hack
   = HLint [String]
@@ -18,16 +23,16 @@ addHLintCPPDefine (HLint oldDefs) newDef = HLint (newDef:oldDefs)
 -- addHLintCPPDefine h               _      = h
 
 applyHacks :: RepoMetadata -> String -> Maybe String
-applyHacks (RM repo _ componentNames) travisYmlContents =
+applyHacks (RM repo _ comps) travisYmlContents =
   fmap doHacks $ Map.lookup repo hacksMap
   where
     doHacks :: [Hack] -> String
     doHacks = foldl' (flip doHack) travisYmlContents
 
     doHack :: Hack -> String -> String
-    doHack (HLint cppDefines) = hlintHack cppDefines componentNames
+    doHack (HLint cppDefines) = hlintHack cppDefines comps
 
-hlintHack :: [String] -> [String]
+hlintHack :: [String] -> [Component]
           -> String -> String
 hlintHack cppDefines componentNames =
   unlines . part3 . part2 . part1 . lines
@@ -56,14 +61,29 @@ hlintHack cppDefines componentNames =
       in    prior
          ++ "  # hlint"
           : map
-              (\package ->
-                "  - (cd " ++ package
-                           ++ "-* && hlint src --cpp-ansi"
-                           ++ concatMap (\cppDef -> " --cpp-define=" ++ cppDef) cppDefines
-                           ++ ")")
+              (\(Component{compName, compGpd}) ->
+                   "  - (cd "
+                ++ compName
+                ++ "-* && hlint "
+                ++ unwords (sourceDirs compGpd)
+                ++ " --cpp-ansi"
+                ++ concatMap (\cppDef -> " --cpp-define=" ++ cppDef) cppDefines
+                ++ ")")
               componentNames
          ++ ""
           : rest
+
+-- Cargo-culted from haskell-ci's @doctestArgs@.
+sourceDirs :: GenericPackageDescription -> [String]
+sourceDirs gpd = case PD.library $ flattenPackageDescription gpd of
+    Nothing -> []
+    Just l  -> dirsOrMods
+      where
+        bi = PD.libBuildInfo l
+
+        dirsOrMods
+            | null (PD.hsSourceDirs bi) = map display (PD.exposedModules l)
+            | otherwise = PD.hsSourceDirs bi
 
 hacksMap :: Map Repo [Hack]
 hacksMap = Map.fromList $ concat
