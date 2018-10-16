@@ -13,6 +13,7 @@ import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
 import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
+import           Data.Traversable
 import           Distribution.Pretty (prettyShow)
 import           Distribution.Version
 import           Options.Applicative
@@ -89,7 +90,7 @@ travisMaintenance cmd =
     Everything pkgs -> perPackageAction pkgs everything
     Clean           -> removeDirectoryRecursive =<< getCheckoutDir
 
-perPackageAction :: [FilePath] -> (Repo -> FilePath -> IO ()) -> IO ()
+perPackageAction :: [FilePath] -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
 perPackageAction pkgs thing =
   inCheckoutDir $ \dir ->
   for_ repos $ \r -> do
@@ -103,7 +104,18 @@ perPackageAction pkgs thing =
       cloneRepo repoSuffix repoDir
       bracket_ (setCurrentDirectory repoDir)
                (setCurrentDirectory dir *> putStrLn "")
-               (thing r repoDir)
+               (do let path = "cabal.project"
+                   contents <- TS.unpack <$> TS.readFile path
+                   pf <- either fail pure $ parseProjectFile path contents
+                   componentNames <-
+                     for (prjPackages pf) $ \package -> do
+                       let cabalFileDir = repoDir </> package
+                       cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
+                                     listDirectory cabalFileDir
+                       case cabalFiles of
+                         [cabalFile] -> pure $ takeBaseName cabalFile
+                         _           -> fail $ show cabalFiles
+                   thing (RM r pf componentNames) repoDir)
 
 cloneRepo :: String -> FilePath -> IO ()
 cloneRepo name repoDir = do
@@ -115,21 +127,18 @@ cloneRepo name repoDir = do
                       , repoDir
                       ]
 
-pull :: Repo -> FilePath -> IO ()
+pull :: RepoMetadata -> FilePath -> IO ()
 pull _ _ = do
   callProcess "git" ["pull"]
 
-reset :: Repo -> FilePath -> IO ()
+reset :: RepoMetadata -> FilePath -> IO ()
 reset _ _  = callProcess "git" [ "reset"
                                , "--hard"
                                , "HEAD"
                                ]
 
-testedWith :: Repo -> FilePath -> IO ()
-testedWith _ fp = do
-  let path = "cabal.project"
-  contents <- TS.unpack <$> TS.readFile path
-  pf <- either fail pure $ parseProjectFile path contents
+testedWith :: RepoMetadata -> FilePath -> IO ()
+testedWith (RM _ pf _) fp = do
   for_ (prjPackages pf) $ \package -> do
     let cabalFileDir = fp </> package
     cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
@@ -162,8 +171,8 @@ testedWith _ fp = do
         Just ver -> prettyShow ver
         Nothing -> error $ show (prim, sec)
 
-regenerate :: Repo -> FilePath -> IO ()
-regenerate r fp = do
+regenerate :: RepoMetadata -> FilePath -> IO ()
+regenerate rap fp = do
   let travisYml     = fp </> ".travis.yml"
       haskellCIDir  = "../../../haskell-ci"
                       -- TODO: Better path handling here
@@ -181,14 +190,14 @@ regenerate r fp = do
                     , travisYml
                     ]
   travisYmlContents <- TS.unpack <$> TS.readFile travisYml
-  let mbTravisYmlContents' = applyHacks r travisYmlContents
+  let mbTravisYmlContents' = applyHacks rap travisYmlContents
   case mbTravisYmlContents' of
     Nothing -> putStrLn "No hacks applied."
     Just travisYmlContents' -> do
       putStrLn "Applying hacks..."
       TS.writeFile travisYml $ TS.pack travisYmlContents'
 
-everything :: Repo -> FilePath -> IO ()
+everything :: RepoMetadata -> FilePath -> IO ()
 everything r fp =
   traverse_ (\f -> f r fp)
     [ pull

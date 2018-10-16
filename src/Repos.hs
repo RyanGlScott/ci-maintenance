@@ -2,6 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Repos where
 
+import           CabalProjectParser
+
 import qualified Data.Set as Set
 import           Data.Set (Set)
 import           Data.Text (Text, unpack)
@@ -10,6 +12,12 @@ import           System.FilePath
 data Repo = Repo
   { repoOwner :: !Text
   , repoName  :: !Text
+  } deriving (Eq, Ord, Read, Show)
+
+data RepoMetadata = RM
+  { rmRepo           :: !Repo
+  , rmProject        :: !Project
+  , rmComponentNames :: ![String]
   } deriving (Eq, Ord, Read, Show)
 
 fullRepoName :: Repo -> String
