@@ -18,6 +18,7 @@ cabal-version:       >=1.10
 executable travis-maintenance
   main-is:             Main.hs
   other-modules:       CabalProjectParser
+                       Hacks
                        Repos
   build-depends:       base                 >= 4.12 && < 4.13
                      , Cabal                >= 2.4  && < 2.6

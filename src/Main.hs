@@ -2,6 +2,7 @@
 module Main (main) where
 
 import           CabalProjectParser
+import           Hacks
 import           Repos
 
 import           Control.Exception
@@ -23,6 +24,7 @@ data Command
   = Pull [FilePath]
   | Reset [FilePath]
   | TestedWith [FilePath]
+  | Regenerate [FilePath]
   | Everything [FilePath]
   | Clean
   deriving (Eq, Ord, Read, Show)
@@ -38,6 +40,9 @@ cmdParser = subparser
  <> command "tested-with"
       (info (testedWithOptions <**> helper)
             (progDesc "Updated tested-with stanzas"))
+ <> command "regenerate"
+      (info (regenerateOptions <**> helper)
+            (progDesc "Regenerate .travis.yml"))
  <> command "everything"
       (info (everythingOptions <**> helper)
             (progDesc "Fully update each library"))
@@ -54,6 +59,9 @@ resetOptions = Reset <$> manyPackages
 
 testedWithOptions :: Parser Command
 testedWithOptions = TestedWith <$> manyPackages
+
+regenerateOptions :: Parser Command
+regenerateOptions = Regenerate <$> manyPackages
 
 everythingOptions :: Parser Command
 everythingOptions = Everything <$> manyPackages
@@ -74,41 +82,51 @@ main = execParser opts >>= travisMaintenance
 travisMaintenance :: Command -> IO ()
 travisMaintenance cmd =
   case cmd of
-    Pull pkgs       -> perPackageAction pkgs (const pull)
-    Reset pkgs      -> perPackageAction pkgs (const reset)
+    Pull pkgs       -> perPackageAction pkgs pull
+    Reset pkgs      -> perPackageAction pkgs reset
     TestedWith pkgs -> perPackageAction pkgs testedWith
+    Regenerate pkgs -> perPackageAction pkgs regenerate
     Everything pkgs -> perPackageAction pkgs everything
     Clean           -> removeDirectoryRecursive =<< getCheckoutDir
 
-perPackageAction :: [FilePath] -> (FilePath -> IO ()) -> IO ()
+perPackageAction :: [FilePath] -> (Repo -> FilePath -> IO ()) -> IO ()
 perPackageAction pkgs thing =
   inCheckoutDir $ \dir ->
   for_ repos $ \r -> do
     let repoSuffix = fullRepoName r
         repoDir    = dir </> repoSuffix
     when (null pkgs || any (`isInfixOf` repoDir) pkgs) $ do
-      exists <- doesDirectoryExist repoDir
-      unless exists $ do
-        createDirectoryIfMissing True repoDir
-        callProcess "git" [ "clone"
-                          , "git@github.com:" ++ repoSuffix
-                          , repoDir
-                          ]
+      let banner = "==================================="
+      putStrLn banner
+      putStrLn $ "== " ++ repoSuffix
+      putStrLn banner
+      cloneRepo repoSuffix repoDir
       bracket_ (setCurrentDirectory repoDir)
-               (setCurrentDirectory dir)
-               (thing repoDir)
+               (setCurrentDirectory dir *> putStrLn "")
+               (thing r repoDir)
 
-pull :: IO ()
-pull = callProcess "git" ["pull"]
+cloneRepo :: String -> FilePath -> IO ()
+cloneRepo name repoDir = do
+  exists <- doesDirectoryExist repoDir
+  unless exists $ do
+    createDirectoryIfMissing True repoDir
+    callProcess "git" [ "clone"
+                      , "git@github.com:" ++ name
+                      , repoDir
+                      ]
 
-reset :: IO ()
-reset = callProcess "git" [ "reset"
-                          , "--hard"
-                          , "HEAD"
-                          ]
+pull :: Repo -> FilePath -> IO ()
+pull _ _ = do
+  callProcess "git" ["pull"]
 
-testedWith :: FilePath -> IO ()
-testedWith fp = do
+reset :: Repo -> FilePath -> IO ()
+reset _ _  = callProcess "git" [ "reset"
+                               , "--hard"
+                               , "HEAD"
+                               ]
+
+testedWith :: Repo -> FilePath -> IO ()
+testedWith _ fp = do
   let path = "cabal.project"
   contents <- TS.unpack <$> TS.readFile path
   pf <- either fail pure $ parseProjectFile path contents
@@ -124,7 +142,7 @@ testedWith fp = do
     replaceTestedWith cabalFilePath = do
       cabalFileContents <- TS.unpack <$> TS.readFile cabalFilePath
       let cabalFileContents' = hack cabalFileContents
-      TS.writeFile cabalFilePath (TS.pack cabalFileContents')
+      TS.writeFile cabalFilePath $ TS.pack cabalFileContents'
 
     hack :: String -> String
     hack [] = []
@@ -144,10 +162,39 @@ testedWith fp = do
         Just ver -> prettyShow ver
         Nothing -> error $ show (prim, sec)
 
-everything :: FilePath -> IO ()
-everything fp = do
-  pull
-  testedWith fp
+regenerate :: Repo -> FilePath -> IO ()
+regenerate r fp = do
+  let travisYml     = fp </> ".travis.yml"
+      haskellCIDir  = "../../../haskell-ci"
+                      -- TODO: Better path handling here
+      oldMakeTravisYml = haskellCIDir </> "make_travis_yml_2.hs"
+      newMakeTravisYml = haskellCIDir </> "MakeTravisYml.hs"
+  cloneRepo "haskell-CI/haskell-ci" haskellCIDir
+  exists <- doesFileExist oldMakeTravisYml
+  when exists $ renameFile oldMakeTravisYml newMakeTravisYml
+  callProcess "ghc" [ haskellCIDir </> "Main.hs"
+                    , "-O2"
+                    , "-i" ++ haskellCIDir
+                    ]
+  callProcess (haskellCIDir </> "Main")
+                    [ "regenerate"
+                    , travisYml
+                    ]
+  travisYmlContents <- TS.unpack <$> TS.readFile travisYml
+  let mbTravisYmlContents' = applyHacks r travisYmlContents
+  case mbTravisYmlContents' of
+    Nothing -> putStrLn "No hacks applied."
+    Just travisYmlContents' -> do
+      putStrLn "Applying hacks..."
+      TS.writeFile travisYml $ TS.pack travisYmlContents'
+
+everything :: Repo -> FilePath -> IO ()
+everything r fp =
+  traverse_ (\f -> f r fp)
+    [ pull
+    , testedWith
+    , regenerate
+    ]
 
 inCheckoutDir :: (FilePath -> IO a) -> IO a
 inCheckoutDir thing = do
