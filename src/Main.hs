@@ -125,7 +125,7 @@ perPackageAction pkgs thing =
                                          , compGpd  = gpd
                                          }
                          _ -> fail $ show cabalFiles
-                   thing (RM r pf components) repoDir)
+                   thing (RM r pf contents components) repoDir)
 
 cloneRepo :: String -> FilePath -> Branch -> IO ()
 cloneRepo name repoDir branch = do
@@ -150,7 +150,7 @@ reset _ _  = callProcess "git" [ "reset"
                                ]
 
 testedWith :: RepoMetadata -> FilePath -> IO ()
-testedWith (RM _ pf _) fp = do
+testedWith (RM _ pf _ _) fp = do
   for_ (prjPackages pf) $ \package -> do
     let cabalFileDir = fp </> package
     cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>

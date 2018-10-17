@@ -34,6 +34,7 @@ branchName (OtherBranch name) = name
 data RepoMetadata = RM
   { rmRepo           :: !Repo
   , rmProject        :: !Project
+  , rmProjectRaw     :: !String
   , rmComponentNames :: ![Component]
   }
 

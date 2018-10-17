@@ -5,6 +5,7 @@ module Hacks where
 import           Repos
 
 import           Data.Bifunctor (first)
+import           Data.Char
 import           Data.Foldable
 import           Data.List.Extra
 import qualified Data.Map.Strict as Map
@@ -18,6 +19,7 @@ data Hack
   = HLint [String]
   | DisableTestsGlobally
   | AlternateConfig [String]
+  | CabalProjectMiscellanea
   deriving (Eq, Ord, Read, Show)
 
 addHLintCPPDefine :: Hack -> String -> Hack
@@ -25,7 +27,7 @@ addHLintCPPDefine (HLint oldDefs) newDef = HLint (newDef:oldDefs)
 addHLintCPPDefine h               _      = h
 
 applyHacks :: RepoMetadata -> String -> Maybe String
-applyHacks (RM repo _ comps) travisYmlContents =
+applyHacks (RM repo _ projContents comps) travisYmlContents =
   fmap doHacks $ Map.lookup repo hacksMap
   where
     doHacks :: [Hack] -> String
@@ -35,6 +37,7 @@ applyHacks (RM repo _ comps) travisYmlContents =
     doHack (HLint cppDefines)           = hlintHack cppDefines comps
     doHack DisableTestsGlobally         = disableTestsGloballyHack
     doHack (AlternateConfig cabalFlags) = alternateConfigHack cabalFlags
+    doHack CabalProjectMiscellanea      = cabalProjectMiscellaneaHack projContents
 
 hlintHack :: [String] -> [Component]
           -> String -> String
@@ -108,6 +111,43 @@ alternateConfigHack cabalFlags = unlines . insertAlternateConfig . lines . useEn
             ]
          ++ rest
 
+cabalProjectMiscellaneaHack :: String -> String -> String
+cabalProjectMiscellaneaHack projContents = unlines . go . lines
+  where
+    go :: [String] -> [String]
+    go ls =
+      let (prior, rest) = break ("  - \"printf 'packages: " `isPrefixOf`) ls
+      in if null rest
+            then ls
+            else let (printfLine:rest') = rest
+                 in    prior
+                    ++ printfLine
+                     : map (\line -> "  - \"echo '" ++ line ++ "' >> cabal.project\"")
+                           relevantCabalProjectLines
+                    ++ go rest'
+
+    relevantCabalProjectLines :: [String]
+    relevantCabalProjectLines =
+      let projContentLines = lines projContents
+      in    collect "package"                   projContentLines
+         ++ collect "source-repository-package" projContentLines
+
+    collect :: String -> [String] -> [String]
+    collect stanzaHead ls =
+      let rest = dropWhile (\line -> not (stanzaHead `isPrefixOf` line) || (':' `elem` line))
+                           ls
+      in if null rest
+         then []
+         else let (stanzaHeaderLine:rest') = rest
+                  (stanzaRest, rest'') =
+                    span (\line -> case line of
+                                     (x:_) -> isSpace x
+                                     []    -> False)
+                         rest'
+              in    stanzaHeaderLine
+                  : stanzaRest
+                 ++ collect stanzaHead rest''
+
 -- Cargo-culted from haskell-ci's @doctestArgs@.
 sourceDirs :: GenericPackageDescription -> [String]
 sourceDirs gpd = case PD.library $ flattenPackageDescription gpd of
@@ -139,8 +179,8 @@ hacksMap = Map.fromList $ concat
     ]
     -- Miscellaneous
   , [ (mkRepo "bos" "criterion",                           [AlternateConfig ["-fembed-data-files"]])
-    , (mkRepo "goldfirere" "singletons",                   [])
-    , (mkRepo "haskell" "primitive",                       [])
+    , (mkRepo "goldfirere" "singletons",                   [CabalProjectMiscellanea])
+    , (mkRepo "haskell" "primitive",                       [CabalProjectMiscellanea])
     , (mkRepo "ku-fpg" "blank-canvas",                     [DisableTestsGlobally])
     , (Repo   "ku-fpg" "blank-canvas" (OtherBranch "0.6"), [DisableTestsGlobally])
     ]
