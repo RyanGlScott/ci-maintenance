@@ -254,9 +254,8 @@ commit _ _ = do
     putStrLn "-- You have uncommitted changes."
     putStrLn "-- Commit? [y/n]"
     putStrLn banner
-    response <- getChar
-    putStrLn ""
-    if toLower response == 'y'
+    response <- getLine
+    if map toLower response == "y"
        then callProcess "git" [ "commit"
                               , "-a"
                               , "-m", commitTitle
