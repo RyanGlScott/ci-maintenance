@@ -95,15 +95,18 @@ travisMaintenance cmd =
 perPackageAction :: [FilePath] -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
 perPackageAction pkgs thing =
   inCheckoutDir $ \dir ->
-  for_ repos $ \r -> do
-    let repoSuffix = fullRepoName r
-        repoDir    = dir </> repoSuffix
+  for_ repos $ \r@(Repo{repoOwner, repoName, repoBranch}) -> do
+    let repoSuffix     = TS.unpack repoOwner </> TS.unpack repoName
+        repoBranchName = TS.unpack (branchName repoBranch)
+        repoDir = case repoBranch of
+                   MasterBranch  -> dir </> repoSuffix
+                   OtherBranch _ -> dir </> repoSuffix ++ "-" ++ repoBranchName
     when (null pkgs || any (`isInfixOf` repoDir) pkgs) $ do
       let banner = "==================================="
       putStrLn banner
-      putStrLn $ "== " ++ repoSuffix
+      putStrLn $ "== " ++ repoSuffix ++ " (" ++ repoBranchName ++ " branch)"
       putStrLn banner
-      cloneRepo repoSuffix repoDir
+      cloneRepo repoSuffix repoDir repoBranch
       bracket_ (setCurrentDirectory repoDir)
                (setCurrentDirectory dir *> putStrLn "")
                (do let path = "cabal.project"
@@ -124,13 +127,15 @@ perPackageAction pkgs thing =
                          _ -> fail $ show cabalFiles
                    thing (RM r pf components) repoDir)
 
-cloneRepo :: String -> FilePath -> IO ()
-cloneRepo name repoDir = do
+cloneRepo :: String -> FilePath -> Branch -> IO ()
+cloneRepo name repoDir branch = do
   exists <- doesDirectoryExist repoDir
   unless exists $ do
     createDirectoryIfMissing True repoDir
     callProcess "git" [ "clone"
                       , "git@github.com:" ++ name
+                      , "--branch"
+                      , TS.unpack (branchName branch)
                       , repoDir
                       ]
 
@@ -185,7 +190,7 @@ regenerate rm fp = do
                       -- TODO: Better path handling here
       oldMakeTravisYml = haskellCIDir </> "make_travis_yml_2.hs"
       newMakeTravisYml = haskellCIDir </> "MakeTravisYml.hs"
-  cloneRepo "haskell-CI/haskell-ci" haskellCIDir
+  cloneRepo "haskell-CI/haskell-ci" haskellCIDir MasterBranch
   exists <- doesFileExist oldMakeTravisYml
   when exists $ renameFile oldMakeTravisYml newMakeTravisYml
   callProcess "ghc" [ haskellCIDir </> "Main.hs"

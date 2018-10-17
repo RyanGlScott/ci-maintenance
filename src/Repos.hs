@@ -6,14 +6,30 @@ import           CabalProjectParser
 
 import qualified Data.Set as Set
 import           Data.Set (Set)
-import           Data.Text (Text, unpack)
+import           Data.Text (Text)
 import           Distribution.PackageDescription (GenericPackageDescription)
-import           System.FilePath
 
 data Repo = Repo
-  { repoOwner :: !Text
-  , repoName  :: !Text
+  { repoOwner  :: !Text
+  , repoName   :: !Text
+  , repoBranch :: !Branch
   } deriving (Eq, Ord, Read, Show)
+
+data Branch
+  = MasterBranch
+  | OtherBranch !Text
+  deriving (Eq, Ord, Read, Show)
+
+mkRepo :: Text -> Text -> Repo
+mkRepo owner name =
+  Repo{ repoOwner  = owner
+      , repoName   = name
+      , repoBranch = MasterBranch
+      }
+
+branchName :: Branch -> Text
+branchName MasterBranch       = "master"
+branchName (OtherBranch name) = name
 
 data RepoMetadata = RM
   { rmRepo           :: !Repo
@@ -26,13 +42,9 @@ data Component = Component
   , compGpd  :: !GenericPackageDescription
   }
 
-fullRepoName :: Repo -> String
-fullRepoName Repo{repoOwner, repoName} =
-  unpack repoOwner </> unpack repoName
-
 repos :: Set Repo
 repos = Set.fromList $ concat
-  [ map (Repo "ekmett")
+  [ map (mkRepo "ekmett")
     [ "ad"
     , "adjunctions"
     , "approximate"
@@ -88,12 +100,12 @@ repos = Set.fromList $ concat
     , "zippers"
     ]
 
-  , map (Repo "goldfirere")
+  , map (mkRepo "goldfirere")
     [ "singletons"
     , "th-desugar"
     ]
 
-  , map (Repo "haskell")
+  , map (mkRepo "haskell")
     [ "hsc2hs"
     , "mtl"
     , "parallel"
@@ -102,14 +114,14 @@ repos = Set.fromList $ concat
     , "unix"
     ]
 
-  , map (Repo "haskell-compat")
+  , map (mkRepo "haskell-compat")
     [ -- "base-compat"
       "base-orphans"
     , "deriving-compat"
     , "mtl-compat"
     ]
 
-  , map (Repo "ku-fpg")
+  , map (mkRepo "ku-fpg")
     [ "blank-canvas"
     , "data-reify"
     , "dotgen"
@@ -119,14 +131,15 @@ repos = Set.fromList $ concat
     , "natural-transformation"
     , "yampa-canvas"
     ]
+  , [ Repo "ku-fpg" "blank-canvas" (OtherBranch "0.6") ]
 
-  , map (Repo "rrnewton")
+  , map (mkRepo "rrnewton")
     [ -- "atomic-primops"
       "criterion-external"
     , "thread-local-storage"
     ]
 
-  , map (Repo "RyanGlScott")
+  , map (mkRepo "RyanGlScott")
     [ "code-page"
     , "echo"
     , "eliminators"
@@ -138,21 +151,21 @@ repos = Set.fromList $ concat
     , "text-show-instances"
     ]
 
-  , map (Repo "scotty-web")
+  , map (mkRepo "scotty-web")
     [ "scotty"
     , "wai-middleware-static"
     ]
 
   -- Miscellaneous
-  , [ Repo "AndrasKovacs" "singleton-nats"
-    , Repo "bos" "criterion"
-    , Repo "dreixel" "generic-deriving"
-    , Repo "foxik" "hashmap"
-    , Repo "glguy" "th-abstraction"
-    , Repo "lens" "lens-aeson"
-    -- , Repo "lpsmith" "bytestring-builder"
-    , Repo "mgsloan" "th-orphans"
-    , Repo "nfrisby" "invariant-functors"
-    -- , Repo "phadej" "cabal-doctest"
+  , [ mkRepo "AndrasKovacs" "singleton-nats"
+    , mkRepo "bos" "criterion"
+    , mkRepo "dreixel" "generic-deriving"
+    , mkRepo "foxik" "hashmap"
+    , mkRepo "glguy" "th-abstraction"
+    , mkRepo "lens" "lens-aeson"
+    -- , mkRepo "lpsmith" "bytestring-builder"
+    , mkRepo "mgsloan" "th-orphans"
+    , mkRepo "nfrisby" "invariant-functors"
+    -- , mkRepo "phadej" "cabal-doctest"
     ]
   ]

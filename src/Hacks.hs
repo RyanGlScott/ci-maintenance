@@ -16,11 +16,12 @@ import           Distribution.Text (display)
 
 data Hack
   = HLint [String]
+  | DisableTestsGlobally
   deriving (Eq, Ord, Read, Show)
 
 addHLintCPPDefine :: Hack -> String -> Hack
 addHLintCPPDefine (HLint oldDefs) newDef = HLint (newDef:oldDefs)
--- addHLintCPPDefine h               _      = h
+addHLintCPPDefine h               _      = h
 
 applyHacks :: RepoMetadata -> String -> Maybe String
 applyHacks (RM repo _ comps) travisYmlContents =
@@ -30,7 +31,8 @@ applyHacks (RM repo _ comps) travisYmlContents =
     doHacks = foldl' (flip doHack) travisYmlContents
 
     doHack :: Hack -> String -> String
-    doHack (HLint cppDefines) = hlintHack cppDefines comps
+    doHack (HLint cppDefines)   = hlintHack cppDefines comps
+    doHack DisableTestsGlobally = disableTestsGloballyHack
 
 hlintHack :: [String] -> [Component]
           -> String -> String
@@ -73,6 +75,17 @@ hlintHack cppDefines componentNames =
          ++ ""
           : rest
 
+disableTestsGloballyHack :: String -> String
+disableTestsGloballyHack = unlines . disableThemTests . lines
+  where
+    disableThemTests :: [String] -> [String]
+    disableThemTests ls =
+      let (prior, testLine:rest) = break ("  - if [ \"x$TEST\" = \"x--enable-tests\" ]; then cabal new-test" `isPrefixOf`) ls
+          ' ':' ':testLineRest = testLine
+      in    prior
+         ++ ("  # " ++ testLineRest)
+          : rest
+
 -- Cargo-culted from haskell-ci's @doctestArgs@.
 sourceDirs :: GenericPackageDescription -> [String]
 sourceDirs gpd = case PD.library $ flattenPackageDescription gpd of
@@ -87,7 +100,7 @@ sourceDirs gpd = case PD.library $ flattenPackageDescription gpd of
 
 hacksMap :: Map Repo [Hack]
 hacksMap = Map.fromList $ concat
-  [ map (first (Repo "ekmett"))
+  [ map (first (mkRepo "ekmett"))
     [ ("bits",          [hlint])
     , ("contravariant", [hlint])
     , ("folds",         [hlint])
@@ -103,10 +116,11 @@ hacksMap = Map.fromList $ concat
     , ("zippers",       [hlint])
     ]
     -- Miscellaneous
-  , [ (Repo "bos" "criterion", [])
-    , (Repo "goldfirere" "singletons", [])
-    , (Repo "haskell" "primitive", [])
-    , (Repo "ku-fpg" "blank-canvas", [])
+  , [ (mkRepo "bos" "criterion",                           [])
+    , (mkRepo "goldfirere" "singletons",                   [])
+    , (mkRepo "haskell" "primitive",                       [])
+    , (mkRepo "ku-fpg" "blank-canvas",                     [DisableTestsGlobally])
+    , (Repo   "ku-fpg" "blank-canvas" (OtherBranch "0.6"), [DisableTestsGlobally])
     ]
   ]
   where
