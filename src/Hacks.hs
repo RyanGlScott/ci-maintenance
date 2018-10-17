@@ -6,7 +6,7 @@ import           Repos
 
 import           Data.Bifunctor (first)
 import           Data.Foldable
-import           Data.List
+import           Data.List.Extra
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
 import qualified Distribution.PackageDescription as PD
@@ -17,6 +17,7 @@ import           Distribution.Text (display)
 data Hack
   = HLint [String]
   | DisableTestsGlobally
+  | AlternateConfig [String]
   deriving (Eq, Ord, Read, Show)
 
 addHLintCPPDefine :: Hack -> String -> Hack
@@ -31,8 +32,9 @@ applyHacks (RM repo _ comps) travisYmlContents =
     doHacks = foldl' (flip doHack) travisYmlContents
 
     doHack :: Hack -> String -> String
-    doHack (HLint cppDefines)   = hlintHack cppDefines comps
-    doHack DisableTestsGlobally = disableTestsGloballyHack
+    doHack (HLint cppDefines)           = hlintHack cppDefines comps
+    doHack DisableTestsGlobally         = disableTestsGloballyHack
+    doHack (AlternateConfig cabalFlags) = alternateConfigHack cabalFlags
 
 hlintHack :: [String] -> [Component]
           -> String -> String
@@ -86,6 +88,26 @@ disableTestsGloballyHack = unlines . disableThemTests . lines
          ++ ("  # " ++ testLineRest)
           : rest
 
+alternateConfigHack :: [String] -> String -> String
+alternateConfigHack cabalFlags = unlines . insertAlternateConfig . lines . useEnvVar
+  where
+    useEnvVar :: String -> String
+    useEnvVar = replace "-w ${HC}" "-w ${HC} ${CABALFLAGS}"
+
+    insertAlternateConfig :: [String] -> [String]
+    insertAlternateConfig ls =
+      let (prior, compiler:env:addons:rest) = break ("    - compiler: \"" `isPrefixOf`) ls
+      in    prior
+         ++ [ compiler
+            , env
+            , addons
+
+            , compiler
+            , "      env: CABALFLAGS=\"" ++ unwords cabalFlags ++ "\""
+            , addons
+            ]
+         ++ rest
+
 -- Cargo-culted from haskell-ci's @doctestArgs@.
 sourceDirs :: GenericPackageDescription -> [String]
 sourceDirs gpd = case PD.library $ flattenPackageDescription gpd of
@@ -106,7 +128,7 @@ hacksMap = Map.fromList $ concat
     , ("folds",         [hlint])
     , ("gc",            [hlint])
     , ("heaps",         [hlint])
-    , ("hyphenation",   [hlint])
+    , ("hyphenation",   [hlint, AlternateConfig ["-fembed"]])
     , ("ersatz",        [hlint])
     , ("lens",          [hlint])
     , ("log-domain",    [hlint `addHLintCPPDefine` "__USE_FFI__"])
@@ -116,7 +138,7 @@ hacksMap = Map.fromList $ concat
     , ("zippers",       [hlint])
     ]
     -- Miscellaneous
-  , [ (mkRepo "bos" "criterion",                           [])
+  , [ (mkRepo "bos" "criterion",                           [AlternateConfig ["-fembed-data-files"]])
     , (mkRepo "goldfirere" "singletons",                   [])
     , (mkRepo "haskell" "primitive",                       [])
     , (mkRepo "ku-fpg" "blank-canvas",                     [DisableTestsGlobally])
