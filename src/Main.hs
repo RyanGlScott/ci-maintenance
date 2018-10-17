@@ -7,6 +7,7 @@ import           Repos
 
 import           Control.Exception
 import           Control.Monad
+import           Data.Char
 import           Data.Foldable
 import           Data.List
 import qualified Data.Map.Strict as Map
@@ -20,6 +21,7 @@ import           Distribution.Verbosity (normal)
 import           Distribution.Version
 import           Options.Applicative
 import           System.Directory
+import           System.Exit
 import           System.FilePath
 import           System.Process
 
@@ -28,6 +30,9 @@ data Command
   | Reset [FilePath]
   | TestedWith [FilePath]
   | Regenerate [FilePath]
+  | Diff [FilePath]
+  | Commit [FilePath]
+  | Push [FilePath]
   | Everything [FilePath]
   | Clean
   deriving (Eq, Ord, Read, Show)
@@ -46,6 +51,15 @@ cmdParser = subparser
  <> command "regenerate"
       (info (regenerateOptions <**> helper)
             (progDesc "Regenerate .travis.yml"))
+ <> command "diff"
+      (info (diffOptions <**> helper)
+            (progDesc "Show the changes"))
+ <> command "commit"
+      (info (commitOptions <**> helper)
+            (progDesc "Commit the changes"))
+ <> command "push"
+      (info (pushOptions <**> helper)
+            (progDesc "Push the changes"))
  <> command "everything"
       (info (everythingOptions <**> helper)
             (progDesc "Fully update each library"))
@@ -65,6 +79,15 @@ testedWithOptions = TestedWith <$> manyPackages
 
 regenerateOptions :: Parser Command
 regenerateOptions = Regenerate <$> manyPackages
+
+diffOptions :: Parser Command
+diffOptions = Diff <$> manyPackages
+
+commitOptions :: Parser Command
+commitOptions = Commit <$> manyPackages
+
+pushOptions :: Parser Command
+pushOptions = Push <$> manyPackages
 
 everythingOptions :: Parser Command
 everythingOptions = Everything <$> manyPackages
@@ -89,6 +112,9 @@ travisMaintenance cmd =
     Reset pkgs      -> perPackageAction pkgs reset
     TestedWith pkgs -> perPackageAction pkgs testedWith
     Regenerate pkgs -> perPackageAction pkgs regenerate
+    Diff pkgs       -> perPackageAction pkgs diff
+    Commit pkgs     -> perPackageAction pkgs commit
+    Push pkgs       -> perPackageAction pkgs push
     Everything pkgs -> perPackageAction pkgs everything
     Clean           -> removeDirectoryRecursive =<< getCheckoutDir
 
@@ -141,13 +167,22 @@ cloneRepo name repoDir branch = do
 
 pull :: RepoMetadata -> FilePath -> IO ()
 pull _ _ = do
-  callProcess "git" ["pull"]
+  callProcess "git" [ "pull" ]
+  callProcess "git" [ "submodule"
+                    , "update"
+                    , "--init"
+                    , "--recursive"
+                    ]
 
 reset :: RepoMetadata -> FilePath -> IO ()
-reset _ _  = callProcess "git" [ "reset"
-                               , "--hard"
-                               , "HEAD"
-                               ]
+reset _ _  = do
+  callProcess "git" [ "reset"
+                    , "--hard"
+                    , "HEAD"
+                    ]
+  callProcess "git" [ "clean"
+                    , "-fdx"
+                    ]
 
 testedWith :: RepoMetadata -> FilePath -> IO ()
 testedWith (RM _ pf _ _) fp = do
@@ -204,18 +239,64 @@ regenerate rm fp = do
   travisYmlContents <- TS.unpack <$> TS.readFile travisYml
   let mbTravisYmlContents' = applyHacks rm travisYmlContents
   case mbTravisYmlContents' of
-    Nothing -> putStrLn "No hacks applied."
-    Just travisYmlContents' -> do
-      putStrLn "Applying hacks..."
-      TS.writeFile travisYml $ TS.pack travisYmlContents'
+    Nothing                 -> pure ()
+    Just travisYmlContents' -> TS.writeFile travisYml $ TS.pack travisYmlContents'
+
+diff :: RepoMetadata -> FilePath -> IO ()
+diff _ _ = gitDiff >>= putStrLn
+
+commit :: RepoMetadata -> FilePath -> IO ()
+commit _ _ = do
+  output <- gitDiff
+  unless (null output) $ do
+    let banner = "------------------------------------------"
+    putStrLn banner
+    putStrLn "-- You have uncommitted changes."
+    putStrLn "-- Commit? [y/n]"
+    putStrLn banner
+    response <- getChar
+    putStrLn ""
+    if toLower response == 'y'
+       then callProcess "git" [ "commit"
+                              , "-a"
+                              , "-m", commitTitle
+                              , "-m", commitDescription
+                              ]
+       else do putStrLn "Come back when you're ready."
+               exitFailure
+
+push :: RepoMetadata -> FilePath -> IO ()
+push (RM r _ _ _) _ =
+  callProcess "git" [ "push"
+                    , "origin"
+                    , TS.unpack $ branchName $ repoBranch r
+                    ]
 
 everything :: RepoMetadata -> FilePath -> IO ()
 everything r fp =
   traverse_ (\f -> f r fp)
-    [ pull
+    [ reset
+    , pull
     , testedWith
     , regenerate
+    , diff
+    , commit
+    , push
     ]
+
+gitDiff :: IO String
+gitDiff = readProcess "git" [ "diff"
+                            , "--color=always"
+                            ] ""
+
+commitTitle :: String
+commitTitle = "Regenerate .travis.yml"
+
+commitDescription :: String
+commitDescription = unlines
+  [ "This commit was performed automatically by a script."
+  , "https://github.com/RyanGlScott/travis-maintenance"
+  ]
 
 inCheckoutDir :: (FilePath -> IO a) -> IO a
 inCheckoutDir thing = do
