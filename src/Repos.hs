@@ -144,10 +144,12 @@ repos = Set.fromList $ concat
     [ "code-page"
     , "echo"
     , "eliminators"
+    , "ghc-software-foundations"
     , "keycode"
     , "lift-generics"
     , "mintty"
     , "proxied"
+    , "singleton-gadts"
     , "text-show"
     , "text-show-instances"
     ]

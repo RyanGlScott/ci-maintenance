@@ -202,13 +202,17 @@ testedWith (RM _ pf _ _) fp = do
 
     hack :: String -> String
     hack [] = []
-    hack ('G':'H':'C':    '=':'=':    primaryNum:'.':secondaryNum:'.':_tertiaryNum:rest)
+    hack ('G':'H':'C':    '=':'=':    primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
+      | tertiaryNum /= '*'
       = "GHC==" ++ hackNum [primaryNum] [secondaryNum] ++ hack rest
-    hack ('G':'H':'C':    '=':'=':    primaryNum:'.':sn1:sn2:     '.':_tertiaryNum:rest)
+    hack ('G':'H':'C':    '=':'=':    primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
+      | tertiaryNum /= '*'
       = "GHC==" ++ hackNum [primaryNum] [sn1, sn2]     ++ hack rest
-    hack ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':secondaryNum:'.':_tertiaryNum:rest)
+    hack ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
+      | tertiaryNum /= '*'
       = "GHC == " ++ hackNum [primaryNum] [secondaryNum] ++ hack rest
-    hack ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':sn1:sn2:     '.':_tertiaryNum:rest)
+    hack ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
+      | tertiaryNum /= '*'
       = "GHC == " ++ hackNum [primaryNum] [sn1, sn2]     ++ hack rest
     hack (x:xs) = x:hack xs
 
@@ -252,7 +256,7 @@ commit _ _ = do
     let banner = "------------------------------------------"
     putStrLn banner
     putStrLn "-- You have uncommitted changes."
-    putStrLn "-- Commit? [y/n]"
+    putStrLn "-- Commit and push? [y/n]"
     putStrLn banner
     response <- getLine
     if map toLower response == "y"

@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Hacks where
 
+import           CabalProjectParser
 import           Repos
 
 import           Data.Bifunctor (first)
@@ -19,7 +20,7 @@ data Hack
   = HLint [String]
   | DisableTestsGlobally
   | AlternateConfig [String]
-  | CabalProjectMiscellanea
+  | CabalProjectMiscellanea [String]
   deriving (Eq, Ord, Read, Show)
 
 addHLintCPPDefine :: Hack -> String -> Hack
@@ -27,17 +28,17 @@ addHLintCPPDefine (HLint oldDefs) newDef = HLint (newDef:oldDefs)
 addHLintCPPDefine h               _      = h
 
 applyHacks :: RepoMetadata -> String -> Maybe String
-applyHacks (RM repo _ projContents comps) travisYmlContents =
+applyHacks (RM repo proj projContents comps) travisYmlContents =
   fmap doHacks $ Map.lookup repo hacksMap
   where
     doHacks :: [Hack] -> String
     doHacks = foldl' (flip doHack) travisYmlContents
 
     doHack :: Hack -> String -> String
-    doHack (HLint cppDefines)           = hlintHack cppDefines comps
-    doHack DisableTestsGlobally         = disableTestsGloballyHack
-    doHack (AlternateConfig cabalFlags) = alternateConfigHack cabalFlags
-    doHack CabalProjectMiscellanea      = cabalProjectMiscellaneaHack projContents
+    doHack (HLint cppDefines)                   = hlintHack cppDefines comps
+    doHack DisableTestsGlobally                 = disableTestsGloballyHack
+    doHack (AlternateConfig cabalFlags)         = alternateConfigHack cabalFlags
+    doHack (CabalProjectMiscellanea extraLines) = cabalProjectMiscellaneaHack proj projContents extraLines
 
 hlintHack :: [String] -> [Component]
           -> String -> String
@@ -111,9 +112,14 @@ alternateConfigHack cabalFlags = unlines . insertAlternateConfig . lines . useEn
             ]
          ++ rest
 
-cabalProjectMiscellaneaHack :: String -> String -> String
-cabalProjectMiscellaneaHack projContents = unlines . go . lines
+cabalProjectMiscellaneaHack :: Project -> String -> [String]
+                            -> String -> String
+cabalProjectMiscellaneaHack proj projContents extraLines =
+  unlines . part2 . part1 . lines
   where
+    part1 :: [String] -> [String]
+    part1 = go
+
     go :: [String] -> [String]
     go ls =
       let (prior, rest) = break ("  - \"printf 'packages: " `isPrefixOf`) ls
@@ -123,7 +129,7 @@ cabalProjectMiscellaneaHack projContents = unlines . go . lines
                  in    prior
                     ++ printfLine
                      : map (\line -> "  - \"echo '" ++ line ++ "' >> cabal.project\"")
-                           relevantCabalProjectLines
+                           (relevantCabalProjectLines ++ extraLines)
                     ++ go rest'
 
     relevantCabalProjectLines :: [String]
@@ -148,10 +154,19 @@ cabalProjectMiscellaneaHack projContents = unlines . go . lines
                   : stanzaRest
                  ++ collect stanzaHead rest''
 
+    part2 :: [String] -> [String]
+    part2 ls | "source-repository-package" `isInfixOf` projContents
+             = let (prior, _newSDistAllLine:rest) = break ("  - cabal new-sdist all" `isPrefixOf`) ls
+               in    prior
+                  ++ map (\pkg -> "  - (cd \"" ++ pkg ++ "\" && cabal new-sdist)") (prjPackages proj)
+                  ++ rest
+             | otherwise
+             = ls
+
 -- Cargo-culted from haskell-ci's @doctestArgs@.
 sourceDirs :: GenericPackageDescription -> [String]
 sourceDirs gpd = case PD.library $ flattenPackageDescription gpd of
-    Nothing -> []
+    Nothing -> ["."] -- ¯\_(ツ)_/¯
     Just l  -> dirsOrMods
       where
         bi = PD.libBuildInfo l
@@ -166,6 +181,11 @@ hacksMap = Map.fromList $ concat
     [ ("bits",          [hlint])
     , ("contravariant", [hlint])
     , ("folds",         [hlint])
+    , ("free",          [ CabalProjectMiscellanea
+                          [ "package free-examples"
+                          , "  flags: -mandelbrot-iter" -- Can't build HGL on Travis
+                          ]
+                        ])
     , ("gc",            [hlint])
     , ("heaps",         [hlint])
     , ("hyphenation",   [hlint, AlternateConfig ["-fembed"]])
@@ -177,12 +197,21 @@ hacksMap = Map.fromList $ concat
     , ("rcu",           [hlint])
     , ("zippers",       [hlint])
     ]
+  , [ (mkRepo "lens" "lens-aeson", [hlint]) ]
+
+  , map (first (mkRepo "ku-fpg"))
+    [ ("blank-canvas",      [CabalProjectMiscellanea [], DisableTestsGlobally])
+    , ("data-reify",        [CabalProjectMiscellanea []])
+    , ("dotgen",            [CabalProjectMiscellanea []])
+    , ("javascript-bridge", [DisableTestsGlobally])
+    , ("yampa-canvas",      [CabalProjectMiscellanea []])
+    ]
+  , [ (Repo "ku-fpg" "blank-canvas" (OtherBranch "0.6"), [CabalProjectMiscellanea [], DisableTestsGlobally]) ]
+
     -- Miscellaneous
-  , [ (mkRepo "bos" "criterion",                           [AlternateConfig ["-fembed-data-files"]])
-    , (mkRepo "goldfirere" "singletons",                   [CabalProjectMiscellanea])
-    , (mkRepo "haskell" "primitive",                       [CabalProjectMiscellanea])
-    , (mkRepo "ku-fpg" "blank-canvas",                     [DisableTestsGlobally])
-    , (Repo   "ku-fpg" "blank-canvas" (OtherBranch "0.6"), [DisableTestsGlobally])
+  , [ (mkRepo "bos" "criterion",         [AlternateConfig ["-fembed-data-files"]])
+    , (mkRepo "goldfirere" "singletons", [CabalProjectMiscellanea []])
+    , (mkRepo "haskell" "primitive",     [CabalProjectMiscellanea []])
     ]
   ]
   where
