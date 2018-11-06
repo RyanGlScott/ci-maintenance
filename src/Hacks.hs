@@ -194,7 +194,7 @@ hacksMap = Map.fromList $ concat
     , ("log-domain",    [hlint `addHLintCPPDefine` "__USE_FFI__"])
     , ("profunctors",   [hlint])
     , ("structs",       [hlint])
-    , ("rcu",           [hlint])
+    , ("rcu",           [hlint, AlternateConfig ["-funstable"]])
     , ("zippers",       [hlint])
     ]
   , [ (mkRepo "lens" "lens-aeson", [hlint]) ]
@@ -212,6 +212,7 @@ hacksMap = Map.fromList $ concat
   , [ (mkRepo "bos" "criterion",         [AlternateConfig ["-fembed-data-files"]])
     , (mkRepo "goldfirere" "singletons", [CabalProjectMiscellanea []])
     , (mkRepo "haskell" "primitive",     [CabalProjectMiscellanea []])
+    , (mkRepo "RyanGlScott" "echo",      [CabalProjectMiscellanea []])
     ]
   ]
   where
