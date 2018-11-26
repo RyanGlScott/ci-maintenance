@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Hacks where
 
-import           CabalProjectParser
 import           Repos
 
 import           Data.Bifunctor (first)
@@ -28,7 +27,7 @@ addHLintCPPDefine (HLint oldDefs) newDef = HLint (newDef:oldDefs)
 addHLintCPPDefine h               _      = h
 
 applyHacks :: RepoMetadata -> String -> Maybe String
-applyHacks (RM repo proj projContents comps) travisYmlContents =
+applyHacks (RM repo _proj projContents comps) travisYmlContents =
   fmap doHacks $ Map.lookup repo hacksMap
   where
     doHacks :: [Hack] -> String
@@ -38,7 +37,7 @@ applyHacks (RM repo proj projContents comps) travisYmlContents =
     doHack (HLint cppDefines)                   = hlintHack cppDefines comps
     doHack DisableTestsGlobally                 = disableTestsGloballyHack
     doHack (AlternateConfig cabalFlags)         = alternateConfigHack cabalFlags
-    doHack (CabalProjectMiscellanea extraLines) = cabalProjectMiscellaneaHack proj projContents extraLines
+    doHack (CabalProjectMiscellanea extraLines) = cabalProjectMiscellaneaHack projContents extraLines
 
 hlintHack :: [String] -> [Component]
           -> String -> String
@@ -112,14 +111,11 @@ alternateConfigHack cabalFlags = unlines . insertAlternateConfig . lines . useEn
             ]
          ++ rest
 
-cabalProjectMiscellaneaHack :: Project -> String -> [String]
+cabalProjectMiscellaneaHack :: String -> [String]
                             -> String -> String
-cabalProjectMiscellaneaHack proj projContents extraLines =
-  unlines . part2 . part1 . lines
+cabalProjectMiscellaneaHack projContents extraLines =
+  unlines . go . lines
   where
-    part1 :: [String] -> [String]
-    part1 = go
-
     go :: [String] -> [String]
     go ls =
       let (prior, rest) = break ("  - \"printf 'packages: " `isPrefixOf`) ls
@@ -153,15 +149,6 @@ cabalProjectMiscellaneaHack proj projContents extraLines =
               in    stanzaHeaderLine
                   : stanzaRest
                  ++ collect stanzaHead rest''
-
-    part2 :: [String] -> [String]
-    part2 ls | "source-repository-package" `isInfixOf` projContents
-             = let (prior, _newSDistAllLine:rest) = break ("  - cabal new-sdist all" `isPrefixOf`) ls
-               in    prior
-                  ++ map (\pkg -> "  - (cd \"" ++ pkg ++ "\" && cabal new-sdist)") (prjPackages proj)
-                  ++ rest
-             | otherwise
-             = ls
 
 -- Cargo-culted from haskell-ci's @doctestArgs@.
 sourceDirs :: GenericPackageDescription -> [String]
