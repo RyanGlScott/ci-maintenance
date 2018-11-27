@@ -166,6 +166,7 @@ hacksMap :: Map Repo [Hack]
 hacksMap = Map.fromList $ concat
   [ map (first (mkRepo "ekmett"))
     [ ("bits",          [hlint])
+    , ("compensated",   [hlint])
     , ("contravariant", [hlint])
     , ("folds",         [hlint])
     , ("free",          [ CabalProjectMiscellanea
