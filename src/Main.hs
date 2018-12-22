@@ -12,11 +12,14 @@ import           Data.Foldable
 import           Data.List
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
+import           Data.Maybe
 import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
 import           Data.Traversable
 import           Distribution.PackageDescription.Parsec
 import           Distribution.Pretty (prettyShow)
+import           Distribution.Text (display, simpleParse)
+import           Distribution.Types.PackageId (PackageIdentifier(..))
 import           Distribution.Verbosity (normal)
 import           Distribution.Version
 import           Options.Applicative
@@ -31,6 +34,7 @@ data Command
   | TestedWith [FilePath]
   | Regenerate [FilePath]
   | Diff [FilePath]
+  | Outdated [FilePath]
   | Commit [FilePath]
   | Push [FilePath]
   | Everything [FilePath]
@@ -54,6 +58,9 @@ cmdParser = subparser
  <> command "diff"
       (info (diffOptions <**> helper)
             (progDesc "Show the changes"))
+ <> command "outdated"
+      (info (outdatedOptions <**> helper)
+            (progDesc "Check if any dependencies are outdated"))
  <> command "commit"
       (info (commitOptions <**> helper)
             (progDesc "Commit the changes"))
@@ -82,6 +89,9 @@ regenerateOptions = Regenerate <$> manyPackages
 
 diffOptions :: Parser Command
 diffOptions = Diff <$> manyPackages
+
+outdatedOptions :: Parser Command
+outdatedOptions = Outdated <$> manyPackages
 
 commitOptions :: Parser Command
 commitOptions = Commit <$> manyPackages
@@ -113,6 +123,7 @@ travisMaintenance cmd =
     TestedWith pkgs -> perPackageAction pkgs testedWith
     Regenerate pkgs -> perPackageAction pkgs regenerate
     Diff pkgs       -> perPackageAction pkgs diff
+    Outdated pkgs   -> perPackageAction pkgs outdated
     Commit pkgs     -> perPackageAction pkgs commit
     Push pkgs       -> perPackageAction pkgs push
     Everything pkgs -> perPackageAction pkgs everything
@@ -249,6 +260,38 @@ regenerate rm fp = do
 diff :: RepoMetadata -> FilePath -> IO ()
 diff _ _ = gitDiff >>= putStrLn
 
+outdated :: RepoMetadata -> FilePath -> IO ()
+outdated (RM{rmRepo = Repo{repoName}}) _ =
+  bracket_ (callProcess "cabal" [ "new-freeze" ])
+           (removeFile "cabal.project.freeze")
+           go
+  where
+    go :: IO ()
+    go = do
+      globalPkgs <- readProcess "ghc-pkg" [ "list"
+                                          , "--global"
+                                          , "--simple-output"
+                                          ] ""
+      let globalPkgIds :: [PackageIdentifier]
+          globalPkgIds = map (\x -> fromMaybe (error $ "Invaid package: " ++ x)
+                                              (simpleParse x))
+                             (words globalPkgs)
+      (ec, stdout, _stderr)
+        <- readProcessWithExitCode
+           "cabal" [ "outdated"
+                   , "--new-freeze-file"
+                   , "--exit-code"
+                   , "--ignore=" ++ intercalate "," (map (display . pkgName) globalPkgIds)
+                   ] ""
+      case ec of
+        ExitSuccess -> pure ()
+        ExitFailure _ -> do
+          putStrLn $ unwords
+            [ TS.unpack repoName ++ "has outdated dependencies:"
+            , stdout
+            ]
+          exitFailure
+
 commit :: RepoMetadata -> FilePath -> IO ()
 commit _ _ = do
   output <- gitDiff
@@ -282,6 +325,7 @@ everything r fp =
     , pull
     , testedWith
     , regenerate
+    , outdated
     , diff
     , commit
     , push
