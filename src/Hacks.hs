@@ -14,6 +14,7 @@ import qualified Distribution.PackageDescription as PD
 import           Distribution.PackageDescription (GenericPackageDescription)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Text (display)
+import           System.FilePath
 
 data Hack
   = HLint [String]
@@ -125,14 +126,47 @@ cabalProjectMiscellaneaHack projContents extraLines =
                  in    prior
                     ++ printfLine
                      : map (\line -> "  - \"echo '" ++ line ++ "' >> cabal.project\"")
-                           (relevantCabalProjectLines ++ extraLines)
+                           (relevantCabalProjectLines
+                              ++ disableSRPTestsBenchmarks
+                              ++ extraLines)
                     ++ go rest'
+
+    disableSRPTestsBenchmarks :: [String]
+    disableSRPTestsBenchmarks =
+      concatMap (\name -> [ "package " ++ name
+                          , "  tests:      False"
+                          , "  benchmarks: False"
+                          ])
+                (scrapeSRPNames projContentLines)
+
+    scrapeSRPNames :: [String] -> [String]
+    scrapeSRPNames ls =
+      let rest = dropWhile (\line -> not ("source-repository-package" `isPrefixOf` line)
+                                      || (':' `elem` line)) ls
+      in if null rest
+         then []
+         else let (_:rest') = rest
+                  (stanzaRest, rest'') =
+                    span (\line -> case line of
+                                     (x:_) -> isSpace x
+                                     []    -> False)
+                         rest'
+                  -- Beware: the way we determine the name of the
+                  -- source-repository-package is extremely hacky, even by the
+                  -- standards of this module. This currently assumes that the
+                  -- location line will be a URL that ends with XYZ.git, where
+                  -- XYZ is the name of the package. Clearly, this is not
+                  -- always true, but I can't be bothered to implement a more
+                  -- robust solution at the moment.
+                  Just locationLine = find ("location:" `isInfixOf`) stanzaRest
+                  [_, url] = words locationLine
+                  name = dropExtension $ takeFileName url
+              in name:scrapeSRPNames rest''
 
     relevantCabalProjectLines :: [String]
     relevantCabalProjectLines =
-      let projContentLines = lines projContents
-      in    collect "package"                   projContentLines
-         ++ collect "source-repository-package" projContentLines
+         collect "package"                   projContentLines
+      ++ collect "source-repository-package" projContentLines
 
     collect :: String -> [String] -> [String]
     collect stanzaHead ls =
@@ -149,6 +183,9 @@ cabalProjectMiscellaneaHack projContents extraLines =
               in    stanzaHeaderLine
                   : stanzaRest
                  ++ collect stanzaHead rest''
+
+    projContentLines :: [String]
+    projContentLines = lines projContents
 
 -- Cargo-culted from haskell-ci's @doctestArgs@.
 sourceDirs :: GenericPackageDescription -> [String]
