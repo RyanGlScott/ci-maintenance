@@ -113,6 +113,7 @@ repos = Set.fromList $ concat
     , "primitive"
     , "stm"
     , "unix"
+    -- , "vector"
     ]
 
   , map (mkRepo "haskell-compat")
