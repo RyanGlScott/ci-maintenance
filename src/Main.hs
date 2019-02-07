@@ -204,7 +204,7 @@ perPackageAction CommonOptions{includePackages} thing =
   where
     shouldRunRepo :: Repo -> Bool
     shouldRunRepo r =
-      maybe False (any (`match` repoFullSuffix r)) includePackages
+      maybe True (any (`match` repoFullSuffix r)) includePackages
 
 cloneRepo :: String -> FilePath -> Branch -> IO ()
 cloneRepo name repoDir branch = do
