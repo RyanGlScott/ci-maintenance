@@ -10,6 +10,7 @@ import           Control.Monad
 import           Data.Char
 import           Data.Foldable
 import           Data.List
+import           Data.List.Split (splitOn)
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
 import           Data.Maybe
@@ -31,85 +32,100 @@ import           System.FilePath
 import           System.Process
 
 data Command
-  = Pull Common
-  | Reset Common
-  | TestedWith Common
-  | Regenerate Common
-  | Diff Common
-  | Outdated Common
-  | Commit Common
-  | Push Common
-  | Everything Common
+  = Pull !CommonOptions
+  | Reset !CommonOptions
+  | TestedWith !CommonOptions
+  | Regenerate !CommonOptions
+  | Diff !CommonOptions
+  | Outdated !OutdatedOptions !CommonOptions
+  | Commit !CommonOptions
+  | Push !CommonOptions
+  | Everything !OutdatedOptions !CommonOptions
   | Clean
   deriving (Eq, Ord, Read, Show)
 
-newtype Common = Common
+newtype OutdatedOptions = OutdatedOptions
+  { excludeDeps :: Maybe [String]
+  } deriving (Eq, Ord, Read, Show)
+
+newtype CommonOptions = CommonOptions
   { packages :: [String]
   } deriving (Eq, Ord, Read, Show)
 
 cmdParser :: Parser Command
 cmdParser = subparser
   ( command "pull"
-      (info (pullOptions <**> helper)
+      (info (pullCommand <**> helper)
             (progDesc "Pull everything"))
  <> command "reset"
-      (info (resetOptions <**> helper)
+      (info (resetCommand <**> helper)
             (progDesc "Reset working changes"))
  <> command "tested-with"
-      (info (testedWithOptions <**> helper)
+      (info (testedWithCommand <**> helper)
             (progDesc "Updated tested-with stanzas"))
  <> command "regenerate"
-      (info (regenerateOptions <**> helper)
+      (info (regenerateCommand <**> helper)
             (progDesc "Regenerate .travis.yml"))
  <> command "diff"
-      (info (diffOptions <**> helper)
+      (info (diffCommand <**> helper)
             (progDesc "Show the changes"))
  <> command "outdated"
-      (info (outdatedOptions <**> helper)
+      (info (outdatedCommand <**> helper)
             (progDesc "Check if any dependencies are outdated"))
  <> command "commit"
-      (info (commitOptions <**> helper)
+      (info (commitCommand <**> helper)
             (progDesc "Commit the changes"))
  <> command "push"
-      (info (pushOptions <**> helper)
+      (info (pushCommand <**> helper)
             (progDesc "Push the changes"))
  <> command "everything"
-      (info (everythingOptions <**> helper)
+      (info (everythingCommand <**> helper)
             (progDesc "Fully update each library"))
  <> command "clean"
       (info (pure Clean <**> helper)
             (progDesc "Clean working directory"))
   )
 
-pullOptions :: Parser Command
-pullOptions = Pull <$> commonOptions
+pullCommand :: Parser Command
+pullCommand = Pull <$> commonOptions
 
-resetOptions :: Parser Command
-resetOptions = Reset <$> commonOptions
+resetCommand :: Parser Command
+resetCommand = Reset <$> commonOptions
 
-testedWithOptions :: Parser Command
-testedWithOptions = TestedWith <$> commonOptions
+testedWithCommand :: Parser Command
+testedWithCommand = TestedWith <$> commonOptions
 
-regenerateOptions :: Parser Command
-regenerateOptions = Regenerate <$> commonOptions
+regenerateCommand :: Parser Command
+regenerateCommand = Regenerate <$> commonOptions
 
-diffOptions :: Parser Command
-diffOptions = Diff <$> commonOptions
+diffCommand :: Parser Command
+diffCommand = Diff <$> commonOptions
 
-outdatedOptions :: Parser Command
-outdatedOptions = Outdated <$> commonOptions
+outdatedCommand :: Parser Command
+outdatedCommand = Outdated <$> outdatedOptions <*> commonOptions
 
-commitOptions :: Parser Command
-commitOptions = Commit <$> commonOptions
+outdatedOptions :: Parser OutdatedOptions
+outdatedOptions = OutdatedOptions
+  <$> (optional . csListOption)
+      (  long "exclude-deps"
+      <> metavar "dep1,dep2,..."
+      <> help "Don't check for these packages when determining outdated dependencies" )
 
-pushOptions :: Parser Command
-pushOptions = Push <$> commonOptions
+commitCommand :: Parser Command
+commitCommand = Commit <$> commonOptions
 
-everythingOptions :: Parser Command
-everythingOptions = Everything <$> commonOptions
+pushCommand :: Parser Command
+pushCommand = Push <$> commonOptions
 
-commonOptions :: Parser Common
-commonOptions = Common <$> (many $ argument str $ metavar "PACKAGE...")
+everythingCommand :: Parser Command
+everythingCommand = Everything <$> outdatedOptions <*> commonOptions
+
+commonOptions :: Parser CommonOptions
+commonOptions = CommonOptions <$> (many $ argument str $ metavar "PACKAGE...")
+
+-- | Comma-separated lists of arguments.
+csListOption :: Mod OptionFields String -> Parser [String]
+csListOption flags = splitOn "," <$> strOption flags
 
 main :: IO ()
 main = execParser opts >>= travisMaintenance
@@ -124,19 +140,21 @@ main = execParser opts >>= travisMaintenance
 travisMaintenance :: Command -> IO ()
 travisMaintenance cmd =
   case cmd of
-    Pull cmmn       -> perPackageAction cmmn pull
-    Reset cmmn      -> perPackageAction cmmn reset
-    TestedWith cmmn -> perPackageAction cmmn testedWith
-    Regenerate cmmn -> perPackageAction cmmn regenerate
-    Diff cmmn       -> perPackageAction cmmn diff
-    Outdated cmmn   -> perPackageAction cmmn outdated
-    Commit cmmn     -> perPackageAction cmmn commit
-    Push cmmn       -> perPackageAction cmmn push
-    Everything cmmn -> perPackageAction cmmn everything
-    Clean           -> removeDirectoryRecursive =<< getCheckoutDir
+    Pull cmmn             -> perPackageAction cmmn pull
+    Reset cmmn            -> perPackageAction cmmn reset
+    TestedWith cmmn       -> perPackageAction cmmn testedWith
+    Regenerate cmmn       -> perPackageAction cmmn regenerate
+    Diff cmmn             -> perPackageAction cmmn diff
+    Outdated outOpts cmmn -> perPackageAction cmmn (outdated outOpts)
+    Commit cmmn           -> perPackageAction cmmn commit
+    Push cmmn             -> perPackageAction cmmn push
 
-perPackageAction :: Common -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
-perPackageAction Common{packages} thing =
+    Everything outOpts cmmn
+          -> perPackageAction cmmn (everything outOpts)
+    Clean -> removeDirectoryRecursive =<< getCheckoutDir
+
+perPackageAction :: CommonOptions -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
+perPackageAction CommonOptions{packages} thing =
   inCheckoutDir $ \dir -> do
     let repos' :: OSet Repo
         repos' = OSet.filter shouldRunRepo repos
@@ -268,8 +286,8 @@ regenerate rm fp = do
 diff :: RepoMetadata -> FilePath -> IO ()
 diff _ _ = gitDiff >>= putStrLn
 
-outdated :: RepoMetadata -> FilePath -> IO ()
-outdated (RM{rmRepo = Repo{repoName}}) _ =
+outdated :: OutdatedOptions -> RepoMetadata -> FilePath -> IO ()
+outdated OutdatedOptions{excludeDeps} RM{rmRepo = Repo{repoName}} _ =
   bracket_ (callProcess "cabal" [ "new-freeze" ])
            (removeFile "cabal.project.freeze")
            go
@@ -289,7 +307,9 @@ outdated (RM{rmRepo = Repo{repoName}}) _ =
            "cabal" [ "outdated"
                    , "--new-freeze-file"
                    , "--exit-code"
-                   , "--ignore=" ++ intercalate "," (map (display . pkgName) globalPkgIds)
+                   , "--ignore=" ++ intercalate ","
+                                    (  map (display . pkgName) globalPkgIds
+                                    ++ fromMaybe [] excludeDeps )
                    ] ""
       case ec of
         ExitSuccess -> pure ()
@@ -325,14 +345,14 @@ push (RM r _ _ _) _ =
                     , branchName $ repoBranch r
                     ]
 
-everything :: RepoMetadata -> FilePath -> IO ()
-everything r fp =
+everything :: OutdatedOptions -> RepoMetadata -> FilePath -> IO ()
+everything outOpts r fp =
   traverse_ (\f -> f r fp)
     [ reset
     , pull
     , testedWith
     , regenerate
-    , outdated
+    , outdated outOpts
     , diff
     , commit
     , push
