@@ -50,7 +50,7 @@ newtype OutdatedOptions = OutdatedOptions
   } deriving (Eq, Show)
 
 newtype CommonOptions = CommonOptions
-  { packagePatterns :: [Pattern]
+  { includePackages :: Maybe [Pattern]
   } deriving (Eq, Show)
 
 cmdParser :: Parser Command
@@ -123,7 +123,11 @@ everythingCommand = Everything <$> outdatedOptions <*> commonOptions
 
 commonOptions :: Parser CommonOptions
 commonOptions = CommonOptions
-  <$> (many $ argument (compile <$> str) $ metavar "PACKAGE...")
+  <$> (optional . fmap (map compile) . csListOption)
+      (  long "include-packages"
+      <> short 'i'
+      <> metavar "pattern1,pattern2,..."
+      <> help "Only check these packages" )
 
 -- | Comma-separated lists of arguments.
 csListOption :: Mod OptionFields String -> Parser [String]
@@ -156,14 +160,14 @@ travisMaintenance cmd =
     Clean -> removeDirectoryRecursive =<< getCheckoutDir
 
 perPackageAction :: CommonOptions -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
-perPackageAction CommonOptions{packagePatterns} thing =
+perPackageAction CommonOptions{includePackages} thing =
   inCheckoutDir $ \dir -> do
     let repos' :: OSet Repo
         repos' = OSet.filter shouldRunRepo repos
     when (null repos') $ do
       putStrLn "Could not find any repos matching the following patterns:"
       putStr "  "
-      for_ packagePatterns $ \pat -> putStr $ ' ':decompile pat
+      traverse_ (traverse_ $ \pat -> putStr $ ' ':decompile pat) includePackages
       putStrLn ""
       exitFailure
     printBanner '~'
@@ -200,8 +204,7 @@ perPackageAction CommonOptions{packagePatterns} thing =
   where
     shouldRunRepo :: Repo -> Bool
     shouldRunRepo r =
-      null packagePatterns || any (`match` repoFullSuffix r) packagePatterns
-
+      maybe False (any (`match` repoFullSuffix r)) includePackages
 
 cloneRepo :: String -> FilePath -> Branch -> IO ()
 cloneRepo name repoDir branch = do
