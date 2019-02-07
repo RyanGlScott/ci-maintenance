@@ -1,33 +1,44 @@
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedStrings #-}
 module Repos where
 
 import           CabalProjectParser
-
 import qualified Data.Set.Ordered as OSet
 import           Data.Set.Ordered (OSet)
-import           Data.Text (Text)
 import           Distribution.PackageDescription (GenericPackageDescription)
+import           System.FilePath
 
 data Repo = Repo
-  { repoOwner  :: !Text
-  , repoName   :: !Text
+  { repoOwner  :: !String
+  , repoName   :: !String
   , repoBranch :: !Branch
   } deriving (Eq, Ord, Read, Show)
 
 data Branch
   = MasterBranch
-  | OtherBranch !Text
+  | OtherBranch !String
   deriving (Eq, Ord, Read, Show)
 
-mkRepo :: Text -> Text -> Repo
+mkRepo :: String -> String -> Repo
 mkRepo owner name =
   Repo{ repoOwner  = owner
       , repoName   = name
       , repoBranch = MasterBranch
       }
 
-branchName :: Branch -> Text
+ppRepo :: Repo -> String
+ppRepo r = repoURLSuffix r ++ " (" ++ branchName (repoBranch r) ++ " branch)"
+
+repoURLSuffix :: Repo -> FilePath
+repoURLSuffix Repo{repoOwner, repoName} = repoOwner </> repoName
+
+repoFullSuffix :: Repo -> FilePath
+repoFullSuffix r =
+  let urlSuffix = repoURLSuffix r in
+  case repoBranch r of
+    MasterBranch  -> urlSuffix
+    OtherBranch _ -> urlSuffix ++ "-" ++ branchName (repoBranch r)
+
+branchName :: Branch -> String
 branchName MasterBranch       = "master"
 branchName (OtherBranch name) = name
 

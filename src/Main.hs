@@ -13,6 +13,8 @@ import           Data.List
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
 import           Data.Maybe
+import qualified Data.Set.Ordered as OSet
+import           Data.Set.Ordered (OSet)
 import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
 import           Data.Traversable
@@ -135,19 +137,21 @@ travisMaintenance cmd =
 
 perPackageAction :: Common -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
 perPackageAction Common{packages} thing =
-  inCheckoutDir $ \dir ->
-  for_ repos $ \r@(Repo{repoOwner, repoName, repoBranch}) -> do
-    let repoSuffix     = TS.unpack repoOwner </> TS.unpack repoName
-        repoBranchName = TS.unpack (branchName repoBranch)
-        repoDir = case repoBranch of
-                   MasterBranch  -> dir </> repoSuffix
-                   OtherBranch _ -> dir </> repoSuffix ++ "-" ++ repoBranchName
-    when (null packages || any (`isInfixOf` repoDir) packages) $ do
-      let banner = "==================================="
-      putStrLn banner
-      putStrLn $ "== " ++ repoSuffix ++ " (" ++ repoBranchName ++ " branch)"
-      putStrLn banner
-      cloneRepo repoSuffix repoDir repoBranch
+  inCheckoutDir $ \dir -> do
+    let repos' :: OSet Repo
+        repos' = OSet.filter shouldRunRepo repos
+    printBanner '~'
+    putStrLn $ "~~ travis-maintenace will look at the following repos:"
+    putStrLn "~~"
+    for_ repos' $ \r -> putStrLn $ "~~     " ++ ppRepo r
+    printBanner '~'
+    putStrLn ""
+    for_ repos' $ \r -> do
+      printBanner '='
+      putStrLn $ "== " ++ ppRepo r
+      printBanner '='
+      let repoDir = dir </> repoFullSuffix r
+      cloneRepo (repoURLSuffix r) repoDir (repoBranch r)
       bracket_ (setCurrentDirectory repoDir)
                (setCurrentDirectory dir *> putStrLn "")
                (do let path = "cabal.project"
@@ -167,6 +171,11 @@ perPackageAction Common{packages} thing =
                                          }
                          _ -> fail $ show cabalFiles
                    thing (RM r pf contents components) repoDir)
+  where
+    shouldRunRepo :: Repo -> Bool
+    shouldRunRepo r =
+      null packages || any (`isInfixOf` repoFullSuffix r) packages
+
 
 cloneRepo :: String -> FilePath -> Branch -> IO ()
 cloneRepo name repoDir branch = do
@@ -176,7 +185,7 @@ cloneRepo name repoDir branch = do
     callProcess "git" [ "clone"
                       , "git@github.com:" ++ name
                       , "--branch"
-                      , TS.unpack (branchName branch)
+                      , branchName branch
                       , repoDir
                       ]
 
@@ -286,7 +295,7 @@ outdated (RM{rmRepo = Repo{repoName}}) _ =
         ExitSuccess -> pure ()
         ExitFailure _ -> do
           putStrLn $ unwords
-            [ TS.unpack repoName ++ "has outdated dependencies:"
+            [ repoName ++ "has outdated dependencies:"
             , stdout
             ]
           exitFailure
@@ -295,11 +304,10 @@ commit :: RepoMetadata -> FilePath -> IO ()
 commit _ _ = do
   output <- gitDiff
   unless (null output) $ do
-    let banner = "------------------------------------------"
-    putStrLn banner
+    printBanner '-'
     putStrLn "-- You have uncommitted changes."
     putStrLn "-- Commit and push? [y/n]"
-    putStrLn banner
+    printBanner '-'
     response <- getLine
     if map toLower response == "y"
        then callProcess "git" [ "commit"
@@ -314,7 +322,7 @@ push :: RepoMetadata -> FilePath -> IO ()
 push (RM r _ _ _) _ =
   callProcess "git" [ "push"
                     , "origin"
-                    , TS.unpack $ branchName $ repoBranch r
+                    , branchName $ repoBranch r
                     ]
 
 everything :: RepoMetadata -> FilePath -> IO ()
@@ -372,3 +380,6 @@ supportedGhcVersions =
   , (("8","4"),  [8,4,4])
   , (("8","6"),  [8,6,3])
   ]
+
+printBanner :: Char -> IO ()
+printBanner = putStrLn . replicate 35
