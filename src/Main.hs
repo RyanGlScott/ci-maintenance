@@ -29,6 +29,7 @@ import           Options.Applicative
 import           System.Directory
 import           System.Exit
 import           System.FilePath
+import           System.FilePath.Glob
 import           System.Process
 
 data Command
@@ -42,15 +43,15 @@ data Command
   | Push !CommonOptions
   | Everything !OutdatedOptions !CommonOptions
   | Clean
-  deriving (Eq, Ord, Read, Show)
+  deriving (Eq, Show)
 
 newtype OutdatedOptions = OutdatedOptions
   { excludeDeps :: Maybe [String]
-  } deriving (Eq, Ord, Read, Show)
+  } deriving (Eq, Show)
 
 newtype CommonOptions = CommonOptions
-  { packages :: [String]
-  } deriving (Eq, Ord, Read, Show)
+  { packagePatterns :: [Pattern]
+  } deriving (Eq, Show)
 
 cmdParser :: Parser Command
 cmdParser = subparser
@@ -121,7 +122,8 @@ everythingCommand :: Parser Command
 everythingCommand = Everything <$> outdatedOptions <*> commonOptions
 
 commonOptions :: Parser CommonOptions
-commonOptions = CommonOptions <$> (many $ argument str $ metavar "PACKAGE...")
+commonOptions = CommonOptions
+  <$> (many $ argument (compile <$> str) $ metavar "PACKAGE...")
 
 -- | Comma-separated lists of arguments.
 csListOption :: Mod OptionFields String -> Parser [String]
@@ -154,10 +156,16 @@ travisMaintenance cmd =
     Clean -> removeDirectoryRecursive =<< getCheckoutDir
 
 perPackageAction :: CommonOptions -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
-perPackageAction CommonOptions{packages} thing =
+perPackageAction CommonOptions{packagePatterns} thing =
   inCheckoutDir $ \dir -> do
     let repos' :: OSet Repo
         repos' = OSet.filter shouldRunRepo repos
+    when (null repos') $ do
+      putStrLn "Could not find any repos matching the following patterns:"
+      putStr "  "
+      for_ packagePatterns $ \pat -> putStr $ ' ':decompile pat
+      putStrLn ""
+      exitFailure
     printBanner '~'
     putStrLn $ "~~ travis-maintenace will look at the following repos:"
     putStrLn "~~"
@@ -192,7 +200,7 @@ perPackageAction CommonOptions{packages} thing =
   where
     shouldRunRepo :: Repo -> Bool
     shouldRunRepo r =
-      null packages || any (`isInfixOf` repoFullSuffix r) packages
+      null packagePatterns || any (`match` repoFullSuffix r) packagePatterns
 
 
 cloneRepo :: String -> FilePath -> Branch -> IO ()
