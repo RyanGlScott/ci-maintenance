@@ -7,6 +7,7 @@ import           TravisYmlHacks
 
 import           Control.Exception
 import           Control.Monad
+import           Data.Bifunctor (Bifunctor(..))
 import           Data.Char
 import           Data.Foldable
 import           Data.List
@@ -243,37 +244,74 @@ testedWith (RM _ pf _ _) fp = do
     let cabalFileDir = fp </> package
     cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
                   listDirectory cabalFileDir
+    appVeyorYmlFiles <- filter (== "appveyor.yml") <$>
+                        listDirectory cabalFileDir
+    case appVeyorYmlFiles of
+      [appVeyorYmlFile] -> replaceTestedWith appVeyorMatrixHack
+                                             (cabalFileDir </> appVeyorYmlFile)
+      _                 -> pure ()
     case cabalFiles of
-      [cabalFile] -> replaceTestedWith (cabalFileDir </> cabalFile)
+      [cabalFile] -> replaceTestedWith cabalTestedVersionsHack
+                                       (cabalFileDir </> cabalFile)
       _           -> fail $ show cabalFiles
   where
-    replaceTestedWith :: FilePath -> IO ()
-    replaceTestedWith cabalFilePath = do
-      cabalFileContents <- TS.unpack <$> TS.readFile cabalFilePath
-      let cabalFileContents' = hack cabalFileContents
-      TS.writeFile cabalFilePath $ TS.pack cabalFileContents'
+    replaceTestedWith :: (String -> String) -> FilePath -> IO ()
+    replaceTestedWith hack filePath = do
+      fileContents <- TS.unpack <$> TS.readFile filePath
+      let fileContents' = hack fileContents
+      TS.writeFile filePath $ TS.pack fileContents'
 
-    hack :: String -> String
-    hack [] = []
-    hack ('G':'H':'C':    '=':'=':    primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
-      | tertiaryNum /= '*'
-      = "GHC==" ++ hackNum [primaryNum] [secondaryNum] ++ hack rest
-    hack ('G':'H':'C':    '=':'=':    primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
-      | tertiaryNum /= '*'
-      = "GHC==" ++ hackNum [primaryNum] [sn1, sn2]     ++ hack rest
-    hack ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
-      | tertiaryNum /= '*'
-      = "GHC == " ++ hackNum [primaryNum] [secondaryNum] ++ hack rest
-    hack ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
-      | tertiaryNum /= '*'
-      = "GHC == " ++ hackNum [primaryNum] [sn1, sn2]     ++ hack rest
-    hack (x:xs) = x:hack xs
+    cabalTestedVersionsHack :: String -> String
+    cabalTestedVersionsHack = go
+      where
+        go :: String -> String
+        go [] = []
+        go ('G':'H':'C':    '=':'=':    primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
+          | tertiaryNum /= '*'
+          = "GHC==" ++ hackNum [primaryNum] [secondaryNum] ++ go rest
+        go ('G':'H':'C':    '=':'=':    primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
+          | tertiaryNum /= '*'
+          = "GHC==" ++ hackNum [primaryNum] [sn1, sn2] ++ go rest
+        go ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
+          | tertiaryNum /= '*'
+          = "GHC == " ++ hackNum [primaryNum] [secondaryNum] ++ go rest
+        go ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
+          | tertiaryNum /= '*'
+          = "GHC == " ++ hackNum [primaryNum] [sn1, sn2] ++ go rest
+        go (x:xs) = x:go xs
 
-    hackNum :: String -> String -> String
-    hackNum prim sec =
+        hackNum :: String -> String -> String
+        hackNum prim sec = fst $ latestTestedWithFor prim sec
+
+    appVeyorMatrixHack :: String -> String
+    appVeyorMatrixHack = go
+      where
+        go :: String -> String
+        go [] = []
+        go ('G':'H':'C':'V':'E':'R':':':' ':'"'
+               :primaryNum:'.':secondaryNum:'.':_tertiaryNum:'"':rest)
+          = "GHCVER: \"" ++ hackNum [primaryNum] [secondaryNum] ++ "\"" ++ go rest
+        go ('G':'H':'C':'V':'E':'R':':':' ':'"'
+               :primaryNum:'.':sn1:sn2:'.':_tertiaryNum:'"':rest)
+          = "GHCVER: \"" ++ hackNum [primaryNum] [sn1,sn2] ++ "\"" ++ go rest
+        go ('G':'H':'C':'V':'E':'R':':':' ':'"'
+               :primaryNum:'.':secondaryNum:'.':_tertiaryNum:'.':_quaternaryNum:'"':rest)
+          = "GHCVER: \"" ++ hackNum [primaryNum] [secondaryNum] ++ "\"" ++ go rest
+        go ('G':'H':'C':'V':'E':'R':':':' ':'"'
+               :primaryNum:'.':sn1:sn2:'.':_tertiaryNum:'.':_quaternaryNum:'"':rest)
+          = "GHCVER: \"" ++ hackNum [primaryNum] [sn1,sn2] ++ "\"" ++ go rest
+        go (x:xs) = x:go xs
+
+        hackNum :: String -> String -> String
+        hackNum prim sec =
+          case latestTestedWithFor prim sec of
+            (maj, mbQuat) -> maj ++ maybe "" (\quat -> '.':show quat) mbQuat
+
+    latestTestedWithFor :: String -> String -> (String, Maybe Int)
+    latestTestedWithFor prim sec =
       case Map.lookup (prim, sec) supportedGhcVersions of
-        Just ver -> prettyShow ver
-        Nothing -> error $ show (prim, sec)
+        Just (ver, appVeyorQuaternary) -> (prettyShow ver, appVeyorQuaternary)
+        Nothing                        -> error $ show (prim, sec)
 
 regenerate :: RepoMetadata -> FilePath -> IO ()
 regenerate rm fp = do
@@ -397,19 +435,22 @@ getCheckoutDir = do
   cwd <- getCurrentDirectory
   pure $ cwd </> "checkout"
 
-supportedGhcVersions :: Map (String, String) Version
+supportedGhcVersions :: Map (String, String) (Version, Maybe Int)
+-- The Version is the the latest point release, up to the tertiary version number.
+-- The Maybe Int is the quaternary version number corresponding to the latest
+-- AppVeyor version (if required).
 supportedGhcVersions =
-  Map.fromList $ map (fmap mkVersion)
-  [ (("7","0"),  [7,0,4])
-  , (("7","2"),  [7,2,2])
-  , (("7","4"),  [7,4,2])
-  , (("7","6"),  [7,6,3])
-  , (("7","8"),  [7,8,4])
-  , (("7","10"), [7,10,3])
-  , (("8","0"),  [8,0,2])
-  , (("8","2"),  [8,2,2])
-  , (("8","4"),  [8,4,4])
-  , (("8","6"),  [8,6,3])
+  Map.fromList $ map (fmap (first mkVersion))
+  [ (("7","0"),  ([7,0,4],  Nothing))
+  , (("7","2"),  ([7,2,2],  Nothing))
+  , (("7","4"),  ([7,4,2],  Nothing))
+  , (("7","6"),  ([7,6,3],  Just 1))
+  , (("7","8"),  ([7,8,4],  Just 1))
+  , (("7","10"), ([7,10,3], Just 2))
+  , (("8","0"),  ([8,0,2],  Just 2))
+  , (("8","2"),  ([8,2,2],  Nothing))
+  , (("8","4"),  ([8,4,4],  Nothing))
+  , (("8","6"),  ([8,6,3],  Nothing))
   ]
 
 printBanner :: Char -> IO ()
