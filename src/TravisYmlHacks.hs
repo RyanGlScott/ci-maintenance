@@ -1,6 +1,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Hacks where
+module TravisYmlHacks (applyTravisYmlHacks) where
 
 import           Repos
 
@@ -16,29 +16,29 @@ import           Distribution.PackageDescription.Configuration (flattenPackageDe
 import           Distribution.Text (display)
 import           System.FilePath
 
-data Hack
+applyTravisYmlHacks :: RepoMetadata -> String -> Maybe String
+applyTravisYmlHacks (RM repo _proj projContents comps) travisYmlContents =
+  fmap doHacks $ Map.lookup repo hacksMap
+  where
+    doHacks :: [TravisYmlHack] -> String
+    doHacks = foldl' (flip doHack) travisYmlContents
+
+    doHack :: TravisYmlHack -> String -> String
+    doHack (HLint cppDefines)                   = hlintHack cppDefines comps
+    doHack DisableTestsGlobally                 = disableTestsGloballyHack
+    doHack (AlternateConfig cabalFlags)         = alternateConfigHack cabalFlags
+    doHack (CabalProjectMiscellanea extraLines) = cabalProjectMiscellaneaHack projContents extraLines
+
+data TravisYmlHack
   = HLint [String]
   | DisableTestsGlobally
   | AlternateConfig [String]
   | CabalProjectMiscellanea [String]
   deriving (Eq, Ord, Read, Show)
 
-addHLintCPPDefine :: Hack -> String -> Hack
+addHLintCPPDefine :: TravisYmlHack -> String -> TravisYmlHack
 addHLintCPPDefine (HLint oldDefs) newDef = HLint (newDef:oldDefs)
 addHLintCPPDefine h               _      = h
-
-applyHacks :: RepoMetadata -> String -> Maybe String
-applyHacks (RM repo _proj projContents comps) travisYmlContents =
-  fmap doHacks $ Map.lookup repo hacksMap
-  where
-    doHacks :: [Hack] -> String
-    doHacks = foldl' (flip doHack) travisYmlContents
-
-    doHack :: Hack -> String -> String
-    doHack (HLint cppDefines)                   = hlintHack cppDefines comps
-    doHack DisableTestsGlobally                 = disableTestsGloballyHack
-    doHack (AlternateConfig cabalFlags)         = alternateConfigHack cabalFlags
-    doHack (CabalProjectMiscellanea extraLines) = cabalProjectMiscellaneaHack projContents extraLines
 
 hlintHack :: [String] -> [Component]
           -> String -> String
@@ -199,7 +199,7 @@ sourceDirs gpd = case PD.library $ flattenPackageDescription gpd of
             | null (PD.hsSourceDirs bi) = map display (PD.exposedModules l)
             | otherwise = PD.hsSourceDirs bi
 
-hacksMap :: Map Repo [Hack]
+hacksMap :: Map Repo [TravisYmlHack]
 hacksMap = Map.fromList $ concat
   [ map (first (mkRepo "ekmett"))
     [ ("bits",          [hlint])
@@ -241,5 +241,5 @@ hacksMap = Map.fromList $ concat
     ]
   ]
   where
-    hlint :: Hack
+    hlint :: TravisYmlHack
     hlint = HLint ["HLINT"]

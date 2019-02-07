@@ -2,8 +2,8 @@
 module Main (main) where
 
 import           CabalProjectParser
-import           Hacks
 import           Repos
+import           TravisYmlHacks
 
 import           Control.Exception
 import           Control.Monad
@@ -289,7 +289,7 @@ regenerate rm fp = do
                     , travisYml
                     ]
   travisYmlContents <- TS.unpack <$> TS.readFile travisYml
-  let mbTravisYmlContents' = applyHacks rm travisYmlContents
+  let mbTravisYmlContents' = applyTravisYmlHacks rm travisYmlContents
   case mbTravisYmlContents' of
     Nothing                 -> pure ()
     Just travisYmlContents' -> TS.writeFile travisYml $ TS.pack travisYmlContents'
