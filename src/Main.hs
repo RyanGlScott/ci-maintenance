@@ -29,17 +29,21 @@ import           System.FilePath
 import           System.Process
 
 data Command
-  = Pull [FilePath]
-  | Reset [FilePath]
-  | TestedWith [FilePath]
-  | Regenerate [FilePath]
-  | Diff [FilePath]
-  | Outdated [FilePath]
-  | Commit [FilePath]
-  | Push [FilePath]
-  | Everything [FilePath]
+  = Pull Common
+  | Reset Common
+  | TestedWith Common
+  | Regenerate Common
+  | Diff Common
+  | Outdated Common
+  | Commit Common
+  | Push Common
+  | Everything Common
   | Clean
   deriving (Eq, Ord, Read, Show)
+
+newtype Common = Common
+  { packages :: [String]
+  } deriving (Eq, Ord, Read, Show)
 
 cmdParser :: Parser Command
 cmdParser = subparser
@@ -76,34 +80,34 @@ cmdParser = subparser
   )
 
 pullOptions :: Parser Command
-pullOptions = Pull <$> manyPackages
+pullOptions = Pull <$> commonOptions
 
 resetOptions :: Parser Command
-resetOptions = Reset <$> manyPackages
+resetOptions = Reset <$> commonOptions
 
 testedWithOptions :: Parser Command
-testedWithOptions = TestedWith <$> manyPackages
+testedWithOptions = TestedWith <$> commonOptions
 
 regenerateOptions :: Parser Command
-regenerateOptions = Regenerate <$> manyPackages
+regenerateOptions = Regenerate <$> commonOptions
 
 diffOptions :: Parser Command
-diffOptions = Diff <$> manyPackages
+diffOptions = Diff <$> commonOptions
 
 outdatedOptions :: Parser Command
-outdatedOptions = Outdated <$> manyPackages
+outdatedOptions = Outdated <$> commonOptions
 
 commitOptions :: Parser Command
-commitOptions = Commit <$> manyPackages
+commitOptions = Commit <$> commonOptions
 
 pushOptions :: Parser Command
-pushOptions = Push <$> manyPackages
+pushOptions = Push <$> commonOptions
 
 everythingOptions :: Parser Command
-everythingOptions = Everything <$> manyPackages
+everythingOptions = Everything <$> commonOptions
 
-manyPackages :: Parser [FilePath]
-manyPackages = many $ argument str $ metavar "PACKAGE..."
+commonOptions :: Parser Common
+commonOptions = Common <$> (many $ argument str $ metavar "PACKAGE...")
 
 main :: IO ()
 main = execParser opts >>= travisMaintenance
@@ -118,19 +122,19 @@ main = execParser opts >>= travisMaintenance
 travisMaintenance :: Command -> IO ()
 travisMaintenance cmd =
   case cmd of
-    Pull pkgs       -> perPackageAction pkgs pull
-    Reset pkgs      -> perPackageAction pkgs reset
-    TestedWith pkgs -> perPackageAction pkgs testedWith
-    Regenerate pkgs -> perPackageAction pkgs regenerate
-    Diff pkgs       -> perPackageAction pkgs diff
-    Outdated pkgs   -> perPackageAction pkgs outdated
-    Commit pkgs     -> perPackageAction pkgs commit
-    Push pkgs       -> perPackageAction pkgs push
-    Everything pkgs -> perPackageAction pkgs everything
+    Pull cmmn       -> perPackageAction cmmn pull
+    Reset cmmn      -> perPackageAction cmmn reset
+    TestedWith cmmn -> perPackageAction cmmn testedWith
+    Regenerate cmmn -> perPackageAction cmmn regenerate
+    Diff cmmn       -> perPackageAction cmmn diff
+    Outdated cmmn   -> perPackageAction cmmn outdated
+    Commit cmmn     -> perPackageAction cmmn commit
+    Push cmmn       -> perPackageAction cmmn push
+    Everything cmmn -> perPackageAction cmmn everything
     Clean           -> removeDirectoryRecursive =<< getCheckoutDir
 
-perPackageAction :: [FilePath] -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
-perPackageAction pkgs thing =
+perPackageAction :: Common -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
+perPackageAction Common{packages} thing =
   inCheckoutDir $ \dir ->
   for_ repos $ \r@(Repo{repoOwner, repoName, repoBranch}) -> do
     let repoSuffix     = TS.unpack repoOwner </> TS.unpack repoName
@@ -138,7 +142,7 @@ perPackageAction pkgs thing =
         repoDir = case repoBranch of
                    MasterBranch  -> dir </> repoSuffix
                    OtherBranch _ -> dir </> repoSuffix ++ "-" ++ repoBranchName
-    when (null pkgs || any (`isInfixOf` repoDir) pkgs) $ do
+    when (null packages || any (`isInfixOf` repoDir) packages) $ do
       let banner = "==================================="
       putStrLn banner
       putStrLn $ "== " ++ repoSuffix ++ " (" ++ repoBranchName ++ " branch)"
@@ -237,15 +241,10 @@ regenerate :: RepoMetadata -> FilePath -> IO ()
 regenerate rm fp = do
   let travisYml     = fp </> ".travis.yml"
       haskellCIDir  = "../../../haskell-ci"
-                      -- TODO: Better path handling here
-      oldMakeTravisYml = haskellCIDir </> "make_travis_yml_2.hs"
-      newMakeTravisYml = haskellCIDir </> "MakeTravisYml.hs"
   cloneRepo "haskell-CI/haskell-ci" haskellCIDir MasterBranch
-  exists <- doesFileExist oldMakeTravisYml
-  when exists $ renameFile oldMakeTravisYml newMakeTravisYml
   callProcess "ghc" [ haskellCIDir </> "Main.hs"
                     , "-O2"
-                    , "-i" ++ haskellCIDir
+                    , "-i" ++ haskellCIDir </> "src"
                     ]
   callProcess (haskellCIDir </> "Main")
                     [ "regenerate"
