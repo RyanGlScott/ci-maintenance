@@ -4,8 +4,8 @@ module Repos where
 
 import           CabalProjectParser
 
-import qualified Data.Set as Set
-import           Data.Set (Set)
+import qualified Data.Set.Ordered as OSet
+import           Data.Set.Ordered (OSet)
 import           Data.Text (Text)
 import           Distribution.PackageDescription (GenericPackageDescription)
 
@@ -43,8 +43,8 @@ data Component = Component
   , compGpd  :: !GenericPackageDescription
   }
 
-repos :: Set Repo
-repos = Set.fromList $ concat
+repos :: OSet Repo
+repos = OSet.fromList $ concat
   [ map (mkRepo "ekmett")
     [ "ad"
     , "adjunctions"
