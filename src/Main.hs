@@ -10,7 +10,7 @@ import           Control.Monad
 import           Data.Bifunctor (Bifunctor(..))
 import           Data.Char
 import           Data.Foldable
-import           Data.List
+import           Data.List.Extra hiding (for, splitOn)
 import           Data.List.Split (splitOn)
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
@@ -318,14 +318,10 @@ regenerate rm fp = do
   let travisYml     = fp </> ".travis.yml"
       haskellCIDir  = "../../../haskell-ci"
   cloneRepo "haskell-CI/haskell-ci" haskellCIDir MasterBranch
-  callProcess "ghc" [ haskellCIDir </> "Main.hs"
-                    , "-O2"
-                    , "-i" ++ haskellCIDir </> "src"
-                    ]
-  callProcess (haskellCIDir </> "Main")
-                    [ "regenerate"
-                    , travisYml
-                    ]
+  haskellCIExe <- inDir haskellCIDir $ do
+    callProcess "cabal" [ "new-build", "exe:haskell-ci" ]
+    trim <$> readProcess "cabal-plan" [ "list-bin", "haskell-ci" ] ""
+  callProcess haskellCIExe [ "regenerate", travisYml ]
   travisYmlContents <- TS.unpack <$> TS.readFile travisYml
   let mbTravisYmlContents' = applyTravisYmlHacks rm travisYmlContents
   case mbTravisYmlContents' of
@@ -423,12 +419,16 @@ commitDescription = unlines
 
 inCheckoutDir :: (FilePath -> IO a) -> IO a
 inCheckoutDir thing = do
-  cwd <- getCurrentDirectory
   checkoutDir <- getCheckoutDir
   createDirectoryIfMissing True checkoutDir
-  bracket_ (setCurrentDirectory checkoutDir)
+  inDir checkoutDir (thing checkoutDir)
+
+inDir :: FilePath -> IO a -> IO a
+inDir dir thing = do
+  cwd <- getCurrentDirectory
+  bracket_ (setCurrentDirectory dir)
            (setCurrentDirectory cwd)
-           (thing checkoutDir)
+           thing
 
 getCheckoutDir :: IO FilePath
 getCheckoutDir = do
