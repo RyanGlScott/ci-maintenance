@@ -321,7 +321,7 @@ regenerate rm fp = do
   haskellCIExe <- inDir haskellCIDir $ do
     callProcess "cabal" [ "new-build", "exe:haskell-ci" ]
     trim <$> readProcess "cabal-plan" [ "list-bin", "haskell-ci" ] ""
-  callProcess haskellCIExe [ "regenerate", travisYml ]
+  callProcess haskellCIExe [ "regenerate" ]
   travisYmlContents <- TS.unpack <$> TS.readFile travisYml
   let mbTravisYmlContents' = applyTravisYmlHacks rm travisYmlContents
   case mbTravisYmlContents' of
