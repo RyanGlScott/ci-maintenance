@@ -15,8 +15,6 @@ import           Data.List.Split (splitOn)
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
 import           Data.Maybe
-import qualified Data.Set.Ordered as OSet
-import           Data.Set.Ordered (OSet)
 import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
 import           Data.Traversable
@@ -50,8 +48,9 @@ newtype OutdatedOptions = OutdatedOptions
   { excludeDeps :: Maybe [String]
   } deriving (Eq, Show)
 
-newtype CommonOptions = CommonOptions
+data CommonOptions = CommonOptions
   { includePackages :: Maybe [Pattern]
+  , startAt         :: Maybe Pattern
   } deriving (Eq, Show)
 
 cmdParser :: Parser Command
@@ -110,7 +109,7 @@ outdatedOptions :: Parser OutdatedOptions
 outdatedOptions = OutdatedOptions
   <$> (optional . csListOption)
       (  long "exclude-deps"
-      <> metavar "dep1,dep2,..."
+      <> metavar "DEP1,DEP2,..."
       <> help "Don't check for these packages when determining outdated dependencies" )
 
 commitCommand :: Parser Command
@@ -127,8 +126,13 @@ commonOptions = CommonOptions
   <$> (optional . fmap (map compile) . csListOption)
       (  long "include-packages"
       <> short 'i'
-      <> metavar "pattern1,pattern2,..."
+      <> metavar "PATTERN1,PATTERN2,..."
       <> help "Only check these packages" )
+  <*> (optional . fmap compile . strOption)
+      (  long "start-at"
+      <> short 's'
+      <> metavar "PATTERN"
+      <> help "Check packages, starting at the supplied one" )
 
 -- | Comma-separated lists of arguments.
 csListOption :: Mod OptionFields String -> Parser [String]
@@ -161,10 +165,11 @@ travisMaintenance cmd =
     Clean -> removeDirectoryRecursive =<< getCheckoutDir
 
 perPackageAction :: CommonOptions -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
-perPackageAction CommonOptions{includePackages} thing =
+perPackageAction CommonOptions{includePackages,startAt} thing =
   inCheckoutDir $ \dir -> do
-    let repos' :: OSet Repo
-        repos' = OSet.filter shouldRunRepo repos
+    let repos' :: [Repo]
+        repos' = dropWhile (\r -> maybe False (not . repoMatchesPattern r) startAt) $
+                 filter shouldRunRepo $ toList repos
     when (null repos') $ do
       putStrLn "Could not find any repos matching the following patterns:"
       putStr "  "
@@ -203,9 +208,11 @@ perPackageAction CommonOptions{includePackages} thing =
                          _ -> fail $ show cabalFiles
                    thing (RM r pf contents components) repoDir)
   where
+    repoMatchesPattern :: Repo -> Pattern -> Bool
+    repoMatchesPattern r p = p `match` repoFullSuffix r
+
     shouldRunRepo :: Repo -> Bool
-    shouldRunRepo r =
-      maybe True (any (`match` repoFullSuffix r)) includePackages
+    shouldRunRepo r = maybe True (any (repoMatchesPattern r)) includePackages
 
 cloneRepo :: String -> FilePath -> Branch -> IO ()
 cloneRepo name repoDir branch = do
