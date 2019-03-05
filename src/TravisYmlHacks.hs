@@ -86,7 +86,7 @@ disableTestsGloballyHack = unlines . disableThemTests . lines
   where
     disableThemTests :: [String] -> [String]
     disableThemTests ls =
-      let (prior, testLine:rest) = break ("  - if [ \"x$TEST\" = \"x--enable-tests\" ]; then cabal new-test" `isPrefixOf`) ls
+      let (prior, testLine:rest) = break ("  - if [ \"x$TEST\" = \"x--enable-tests\" ]; then ${CABAL} new-test" `isPrefixOf`) ls
           ' ':' ':testLineRest = testLine
       in    prior
          ++ ("  # " ++ testLineRest)
@@ -225,13 +225,13 @@ hacksMap = Map.fromList $ concat
   , [ (mkRepo "lens" "lens-aeson", [hlint]) ]
 
   , map (first (mkRepo "ku-fpg"))
-    [ ("blank-canvas",      [CabalProjectMiscellanea [], DisableTestsGlobally])
+    [ ("blank-canvas",      [DisableTestsGlobally])
     , ("data-reify",        [CabalProjectMiscellanea []])
     , ("dotgen",            [CabalProjectMiscellanea []])
     , ("javascript-bridge", [DisableTestsGlobally])
     , ("yampa-canvas",      [CabalProjectMiscellanea []])
     ]
-  , [ (Repo "ku-fpg" "blank-canvas" (OtherBranch "0.6"), [CabalProjectMiscellanea [], DisableTestsGlobally]) ]
+  , [ (Repo "ku-fpg" "blank-canvas" (OtherBranch "0.6"), [DisableTestsGlobally]) ]
 
     -- Miscellaneous
   , [ (mkRepo "bos" "criterion",         [AlternateConfig ["-fembed-data-files"]])
