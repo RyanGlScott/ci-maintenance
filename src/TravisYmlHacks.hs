@@ -226,10 +226,7 @@ hacksMap = Map.fromList $ concat
 
   , map (first (mkRepo "ku-fpg"))
     [ ("blank-canvas",      [DisableTestsGlobally])
-    , ("data-reify",        [CabalProjectMiscellanea []])
-    , ("dotgen",            [CabalProjectMiscellanea []])
     , ("javascript-bridge", [DisableTestsGlobally])
-    , ("yampa-canvas",      [CabalProjectMiscellanea []])
     ]
   , [ (Repo "ku-fpg" "blank-canvas" (OtherBranch "0.6"), [DisableTestsGlobally]) ]
 
