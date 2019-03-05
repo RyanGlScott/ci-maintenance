@@ -235,7 +235,6 @@ hacksMap = Map.fromList $ concat
 
     -- Miscellaneous
   , [ (mkRepo "bos" "criterion",         [AlternateConfig ["-fembed-data-files"]])
-    , (mkRepo "goldfirere" "singletons", [CabalProjectMiscellanea []])
     , (mkRepo "haskell" "primitive",     [CabalProjectMiscellanea []])
     , (mkRepo "RyanGlScott" "echo",      [CabalProjectMiscellanea []])
     ]
