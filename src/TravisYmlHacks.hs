@@ -5,7 +5,6 @@ module TravisYmlHacks (applyTravisYmlHacks) where
 import           Repos
 
 import           Data.Bifunctor (first)
-import           Data.Char
 import           Data.Foldable
 import           Data.List.Extra
 import qualified Data.Map.Strict as Map
@@ -14,10 +13,9 @@ import qualified Distribution.PackageDescription as PD
 import           Distribution.PackageDescription (GenericPackageDescription)
 import           Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import           Distribution.Text (display)
-import           System.FilePath
 
 applyTravisYmlHacks :: RepoMetadata -> String -> Maybe String
-applyTravisYmlHacks (RM repo _proj projContents comps) travisYmlContents =
+applyTravisYmlHacks (RM repo _proj _projContents comps) travisYmlContents =
   fmap doHacks $ Map.lookup repo hacksMap
   where
     doHacks :: [TravisYmlHack] -> String
@@ -27,13 +25,11 @@ applyTravisYmlHacks (RM repo _proj projContents comps) travisYmlContents =
     doHack (HLint cppDefines)                   = hlintHack cppDefines comps
     doHack DisableTestsGlobally                 = disableTestsGloballyHack
     doHack (AlternateConfig cabalFlags)         = alternateConfigHack cabalFlags
-    doHack (CabalProjectMiscellanea extraLines) = cabalProjectMiscellaneaHack projContents extraLines
 
 data TravisYmlHack
   = HLint [String]
   | DisableTestsGlobally
   | AlternateConfig [String]
-  | CabalProjectMiscellanea [String]
   deriving (Eq, Ord, Read, Show)
 
 addHLintCPPDefine :: TravisYmlHack -> String -> TravisYmlHack
@@ -112,81 +108,6 @@ alternateConfigHack cabalFlags = unlines . insertAlternateConfig . lines . useEn
             ]
          ++ rest
 
-cabalProjectMiscellaneaHack :: String -> [String]
-                            -> String -> String
-cabalProjectMiscellaneaHack projContents extraLines =
-  unlines . go . lines
-  where
-    go :: [String] -> [String]
-    go ls =
-      let (prior, rest) = break ("  - \"printf 'packages: " `isPrefixOf`) ls
-      in if null rest
-            then ls
-            else let (printfLine:rest') = rest
-                 in    prior
-                    ++ printfLine
-                     : map (\line -> "  - \"echo '" ++ line ++ "' >> cabal.project\"")
-                           (relevantCabalProjectLines
-                              ++ disableSRPTestsBenchmarks
-                              ++ extraLines)
-                    ++ go rest'
-
-    disableSRPTestsBenchmarks :: [String]
-    disableSRPTestsBenchmarks =
-      concatMap (\name -> [ "package " ++ name
-                          , "  tests:      False"
-                          , "  benchmarks: False"
-                          ])
-                (scrapeSRPNames projContentLines)
-
-    scrapeSRPNames :: [String] -> [String]
-    scrapeSRPNames ls =
-      let rest = dropWhile (\line -> not ("source-repository-package" `isPrefixOf` line)
-                                      || (':' `elem` line)) ls
-      in if null rest
-         then []
-         else let (_:rest') = rest
-                  (stanzaRest, rest'') =
-                    span (\line -> case line of
-                                     (x:_) -> isSpace x
-                                     []    -> False)
-                         rest'
-                  -- Beware: the way we determine the name of the
-                  -- source-repository-package is extremely hacky, even by the
-                  -- standards of this module. This currently assumes that the
-                  -- location line will be a URL that ends with XYZ.git, where
-                  -- XYZ is the name of the package. Clearly, this is not
-                  -- always true, but I can't be bothered to implement a more
-                  -- robust solution at the moment.
-                  Just locationLine = find ("location:" `isInfixOf`) stanzaRest
-                  [_, url] = words locationLine
-                  name = dropExtension $ takeFileName url
-              in name:scrapeSRPNames rest''
-
-    relevantCabalProjectLines :: [String]
-    relevantCabalProjectLines =
-         collect "package"                   projContentLines
-      ++ collect "source-repository-package" projContentLines
-
-    collect :: String -> [String] -> [String]
-    collect stanzaHead ls =
-      let rest = dropWhile (\line -> not (stanzaHead `isPrefixOf` line) || (':' `elem` line))
-                           ls
-      in if null rest
-         then []
-         else let (stanzaHeaderLine:rest') = rest
-                  (stanzaRest, rest'') =
-                    span (\line -> case line of
-                                     (x:_) -> isSpace x
-                                     []    -> False)
-                         rest'
-              in    stanzaHeaderLine
-                  : stanzaRest
-                 ++ collect stanzaHead rest''
-
-    projContentLines :: [String]
-    projContentLines = lines projContents
-
 -- Cargo-culted from haskell-ci's @doctestArgs@.
 sourceDirs :: GenericPackageDescription -> [String]
 sourceDirs gpd = case PD.library $ flattenPackageDescription gpd of
@@ -206,11 +127,6 @@ hacksMap = Map.fromList $ concat
     , ("compensated",   [hlint])
     , ("contravariant", [hlint])
     , ("folds",         [hlint])
-    , ("free",          [ CabalProjectMiscellanea
-                          [ "package free-examples"
-                          , "  flags: -mandelbrot-iter" -- Can't build HGL on Travis
-                          ]
-                        ])
     , ("gc",            [hlint])
     , ("heaps",         [hlint])
     , ("hyphenation",   [hlint, AlternateConfig ["-fembed"]])
@@ -231,8 +147,7 @@ hacksMap = Map.fromList $ concat
   , [ (Repo "ku-fpg" "blank-canvas" (OtherBranch "0.6"), [DisableTestsGlobally]) ]
 
     -- Miscellaneous
-  , [ (mkRepo "bos" "criterion",         [AlternateConfig ["-fembed-data-files"]])
-    , (mkRepo "RyanGlScott" "echo",      [CabalProjectMiscellanea []])
+  , [ (mkRepo "bos" "criterion", [AlternateConfig ["-fembed-data-files"]])
     ]
   ]
   where
