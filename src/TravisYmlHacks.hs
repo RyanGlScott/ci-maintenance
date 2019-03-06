@@ -32,10 +32,6 @@ data TravisYmlHack
   | AlternateConfig [String]
   deriving (Eq, Ord, Read, Show)
 
-addHLintCPPDefine :: TravisYmlHack -> String -> TravisYmlHack
-addHLintCPPDefine (HLint oldDefs) newDef = HLint (newDef:oldDefs)
-addHLintCPPDefine h               _      = h
-
 hlintHack :: [String] -> [Component]
           -> String -> String
 hlintHack cppDefines componentNames =
@@ -128,11 +124,9 @@ hacksMap = Map.fromList $ concat
     , ("contravariant", [hlint])
     , ("folds",         [hlint])
     , ("gc",            [hlint])
-    , ("heaps",         [hlint])
     , ("hyphenation",   [hlint, AlternateConfig ["-fembed"]])
     , ("ersatz",        [hlint])
     , ("lens",          [hlint])
-    , ("log-domain",    [hlint `addHLintCPPDefine` "__USE_FFI__"])
     , ("profunctors",   [hlint])
     , ("structs",       [hlint])
     , ("rcu",           [hlint, AlternateConfig ["-funstable"]])
