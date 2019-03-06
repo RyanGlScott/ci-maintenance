@@ -45,10 +45,9 @@ alternateConfigHack cabalFlags = unlines . insertAlternateConfig . lines . useEn
 
     insertAlternateConfig :: [String] -> [String]
     insertAlternateConfig ls =
-      let (prior, compiler:env:addons:rest) = break ("    - compiler: \"" `isPrefixOf`) ls
+      let (prior, compiler:addons:rest) = break ("    - compiler: \"" `isPrefixOf`) ls
       in    prior
          ++ [ compiler
-            , env
             , addons
 
             , compiler
