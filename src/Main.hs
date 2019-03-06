@@ -17,12 +17,9 @@ import           Data.Map.Strict (Map)
 import           Data.Maybe
 import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
-import           Data.Traversable
-import           Distribution.PackageDescription.Parsec
 import           Distribution.Pretty (prettyShow)
 import           Distribution.Text (display, simpleParse)
 import           Distribution.Types.PackageId (PackageIdentifier(..))
-import           Distribution.Verbosity (normal)
 import           Distribution.Version
 import           Options.Applicative
 import           System.Directory
@@ -193,20 +190,7 @@ perPackageAction CommonOptions{includePackages,startAt} thing =
                (do let path = "cabal.project"
                    contents <- TS.unpack <$> TS.readFile path
                    pf <- either fail pure $ parseProjectFile path contents
-                   components <-
-                     for (prjPackages pf) $ \package -> do
-                       let cabalFileDir = repoDir </> package
-                       cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
-                                     listDirectory cabalFileDir
-                       case cabalFiles of
-                         [cabalFile] -> do
-                           gpd <- readGenericPackageDescription
-                                    normal (cabalFileDir </> cabalFile)
-                           pure Component{ compName = takeBaseName cabalFile
-                                         , compGpd  = gpd
-                                         }
-                         _ -> fail $ show cabalFiles
-                   thing (RM r pf contents components) repoDir)
+                   thing (RM r pf) repoDir)
   where
     repoMatchesPattern :: Repo -> Pattern -> Bool
     repoMatchesPattern r p = p `match` repoFullSuffix r
@@ -246,7 +230,7 @@ reset _ _  = do
                     ]
 
 testedWith :: RepoMetadata -> FilePath -> IO ()
-testedWith (RM _ pf _ _) fp = do
+testedWith (RM _ pf) fp = do
   for_ (prjPackages pf) $ \package -> do
     let cabalFileDir = fp </> package
     cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
@@ -391,7 +375,7 @@ commit _ _ = do
                exitFailure
 
 push :: RepoMetadata -> FilePath -> IO ()
-push (RM r _ _ _) _ =
+push (RM r _) _ =
   callProcess "git" [ "push"
                     , "origin"
                     , branchName $ repoBranch r

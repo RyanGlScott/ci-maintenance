@@ -43,10 +43,8 @@ branchName MasterBranch       = "master"
 branchName (OtherBranch name) = name
 
 data RepoMetadata = RM
-  { rmRepo           :: !Repo
-  , rmProject        :: !Project
-  , rmProjectRaw     :: !String
-  , rmComponentNames :: ![Component]
+  { rmRepo    :: !Repo
+  , rmProject :: !Project
   }
 
 data Component = Component
