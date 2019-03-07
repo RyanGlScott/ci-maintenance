@@ -3,7 +3,6 @@ module Main (main) where
 
 import           CabalProjectParser
 import           Repos
-import           TravisYmlHacks
 
 import           Control.Exception
 import           Control.Monad
@@ -305,19 +304,13 @@ testedWith (RM _ pf) fp = do
         Nothing                        -> error $ show (prim, sec)
 
 regenerate :: RepoMetadata -> FilePath -> IO ()
-regenerate rm fp = do
-  let travisYml     = fp </> ".travis.yml"
-      haskellCIDir  = "../../../haskell-ci"
+regenerate _ _ = do
+  let haskellCIDir = "../../../haskell-ci"
   cloneRepo "haskell-CI/haskell-ci" haskellCIDir MasterBranch
   haskellCIExe <- inDir haskellCIDir $ do
     callProcess "cabal" [ "new-build", "exe:haskell-ci" ]
     trim <$> readProcess "cabal-plan" [ "list-bin", "haskell-ci" ] ""
   callProcess haskellCIExe [ "regenerate" ]
-  travisYmlContents <- TS.unpack <$> TS.readFile travisYml
-  let mbTravisYmlContents' = applyTravisYmlHacks rm travisYmlContents
-  case mbTravisYmlContents' of
-    Nothing                 -> pure ()
-    Just travisYmlContents' -> TS.writeFile travisYml $ TS.pack travisYmlContents'
 
 diff :: RepoMetadata -> FilePath -> IO ()
 diff _ _ = gitDiff >>= putStrLn
