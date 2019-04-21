@@ -126,8 +126,8 @@ repos = OSet.fromList $ concat
     ]
 
   , map (mkRepo "haskell-compat")
-    [ -- "base-compat"
-      "base-orphans"
+    [ "base-compat"
+    , "base-orphans"
     , "deriving-compat"
     , "mtl-compat"
     ]
