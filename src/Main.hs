@@ -9,8 +9,7 @@ import           Control.Monad
 import           Data.Bifunctor (Bifunctor(..))
 import           Data.Char
 import           Data.Foldable
-import           Data.List.Extra hiding (for, splitOn)
-import           Data.List.Split (splitOn)
+import           Data.List.Extra hiding (for)
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
 import           Data.Maybe
@@ -132,7 +131,17 @@ commonOptions = CommonOptions
 
 -- | Comma-separated lists of arguments.
 csListOption :: Mod OptionFields String -> Parser [String]
-csListOption flags = splitOn "," <$> strOption flags
+csListOption flags = splitAtElement ',' <$> strOption flags
+
+splitAtElement :: Eq a => a -> [a] -> [[a]]
+splitAtElement x l =
+  case l of
+    []          -> []
+    e:es | e==x -> split' es
+    es          -> split' es
+  where
+    split' es = let (esx,esxs) = break (x==) es
+                in esx : splitAtElement x esxs
 
 main :: IO ()
 main = execParser opts >>= travisMaintenance
