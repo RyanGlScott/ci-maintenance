@@ -353,7 +353,7 @@ outdated OutdatedOptions{excludeDeps} RM{rmRepo = Repo{repoName}} _ =
         ExitSuccess -> pure ()
         ExitFailure _ -> do
           putStrLn $ unwords
-            [ repoName ++ "has outdated dependencies:"
+            [ repoName ++ " has outdated dependencies:"
             , stdout
             ]
           exitFailure
