@@ -277,6 +277,12 @@ testedWith (RM _ pf) fp = do
         go ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
           | tertiaryNum /= '*'
           = "GHC == " ++ hackNum [primaryNum] [sn1, sn2] ++ go rest
+        go ('|':'|':' ':'=':'=':primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
+          | tertiaryNum /= '*'
+          = "|| ==" ++ hackNum [primaryNum] [secondaryNum] ++ go rest
+        go ('|':'|':' ':'=':'=':primaryNum:'.':sn1:sn2:'.':tertiaryNum:rest)
+          | tertiaryNum /= '*'
+          = "|| ==" ++ hackNum [primaryNum] [sn1, sn2] ++ go rest
         go (x:xs) = x:go xs
 
         hackNum :: String -> String -> String
