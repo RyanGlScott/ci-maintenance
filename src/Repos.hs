@@ -62,6 +62,7 @@ repos = OSet.fromList $ concat
     , "bits"
     , "bound"
     , "bytes"
+    , "charset"
     , "comonad"
     , "compensated"
     , "constraints"
@@ -107,6 +108,7 @@ repos = OSet.fromList $ concat
     , "transformers-compat"
     , "trifecta"
     , "vector-instances"
+    , "void"
     , "zippers"
     ]
 
