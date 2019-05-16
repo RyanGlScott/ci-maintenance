@@ -158,6 +158,7 @@ repos = OSet.fromList $ concat
     , "echo"
     , "eliminators"
     , "ghc-software-foundations"
+    , "gists"
     , "keycode"
     , "lift-generics"
     , "mintty"
