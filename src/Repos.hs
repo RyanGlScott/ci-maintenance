@@ -144,7 +144,7 @@ repos = OSet.fromList $ concat
     , "remote-monad"
     , "yampa-canvas"
     ]
-  , [ Repo "ku-fpg" "blank-canvas" (OtherBranch "0.6") ]
+  , [ Repo "ku-fpg" "blank-canvas" (OtherBranch "0.7") ]
 
   , map (mkRepo "rrnewton")
     [ -- "atomic-primops"
