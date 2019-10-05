@@ -146,6 +146,13 @@ repos = OSet.fromList $ concat
     ]
   , [ Repo "ku-fpg" "blank-canvas" (OtherBranch "0.7") ]
 
+  {-
+  , map (mkRepo "phadej")
+    [ "cabal-doctest"
+    , "type-equality"
+    ]
+  -}
+
   , map (mkRepo "rrnewton")
     [ -- "atomic-primops"
       "criterion-external"
@@ -182,6 +189,5 @@ repos = OSet.fromList $ concat
     -- , mkRepo "lpsmith" "bytestring-builder"
     , mkRepo "mgsloan" "th-orphans"
     , mkRepo "nfrisby" "invariant-functors"
-    -- , mkRepo "phadej" "cabal-doctest"
     ]
   ]
