@@ -161,6 +161,7 @@ repos = OSet.fromList $ concat
 
   , map (mkRepo "RyanGlScott")
     [ "code-page"
+    , "constraint-tuples"
     , "echo"
     , "eliminators"
     , "ghc-software-foundations"
