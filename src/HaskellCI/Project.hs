@@ -20,6 +20,7 @@ import Data.Functor
 import Data.Generics.Labels ()
 import Lens.Micro (over)
 import GHC.Generics
+import Network.URI (URI)
 
 import qualified Data.Map.Strict                              as M
 import qualified Distribution.CabalSpecVersion                as C
@@ -40,6 +41,7 @@ import HaskellCI.ParsecError
 data Project b a = Project
     { prjPackages     :: [a]
     , prjOptPackages  :: [b]
+    , prjUriPackages  :: [URI]
     , prjConstraints  :: [String]
     , prjAllowNewer   :: [String]
     , prjReorderGoals :: Bool
@@ -59,7 +61,7 @@ instance Bitraversable Project where
         <*> traverse g (prjPackages prj)
 
 emptyProject :: Project b a
-emptyProject = Project [] [] [] [] False Nothing OptimizationOn [] []
+emptyProject = Project [] [] [] [] [] False Nothing OptimizationOn [] []
 
 -- | Parse project file. Extracts only few fields.
 --
@@ -98,6 +100,7 @@ grammar :: [C.PrettyField ()] -> C.ParsecFieldGrammar (Project String String) (P
 grammar origFields = Project
     <$> C.monoidalFieldAla "packages"          (C.alaList' C.FSep PackageLocation) #prjPackages
     <*> C.monoidalFieldAla "optional-packages" (C.alaList' C.FSep PackageLocation) #prjOptPackages
+    <*> pure []
     <*> C.monoidalFieldAla "constraints"       (C.alaList' C.CommaVCat NoCommas)   #prjConstraints
     <*> C.monoidalFieldAla "allow-newer"       (C.alaList' C.CommaVCat NoCommas)   #prjAllowNewer
     <*> C.booleanFieldDef  "reorder-goals"                                         #prjReorderGoals False
