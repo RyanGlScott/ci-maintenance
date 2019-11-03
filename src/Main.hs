@@ -1,9 +1,10 @@
 {-# LANGUAGE NamedFieldPuns #-}
 module Main (main) where
 
-import           HaskellCI.Project
 import           Repos
 
+import           Cabal.Parse
+import           Cabal.Project
 import           Control.Exception
 import           Control.Monad
 import           Data.Bifunctor (Bifunctor(..))
@@ -198,7 +199,7 @@ perPackageAction CommonOptions{includePackages,startAt} thing =
                (setCurrentDirectory dir *> putStrLn "")
                (do let path = "cabal.project"
                    contents <- BS.readFile path
-                   pf <- either fail pure $ parseProjectFile path contents
+                   pf <- either (fail . renderParseError) pure $ parseProject path contents
                    thing (RM r pf) repoDir)
   where
     repoMatchesPattern :: Repo -> Pattern -> Bool

@@ -1,10 +1,11 @@
 {-# LANGUAGE NamedFieldPuns #-}
 module Repos where
 
+import           Cabal.Project
 import qualified Data.Set.Ordered as OSet
 import           Data.Set.Ordered (OSet)
+import           Data.Void
 import           Distribution.PackageDescription (GenericPackageDescription)
-import           HaskellCI.Project
 import           System.FilePath
 
 data Repo = Repo
@@ -44,7 +45,7 @@ branchName (OtherBranch name) = name
 
 data RepoMetadata = RM
   { rmRepo    :: !Repo
-  , rmProject :: !(Project String String)
+  , rmProject :: !(Project Void String String)
   }
 
 data Component = Component
