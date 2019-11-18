@@ -22,7 +22,7 @@ source-repository head
 executable travis-maintenance
   main-is:             Main.hs
   other-modules:       Repos
-  build-depends:       base                 >= 4.12     && < 4.13
+  build-depends:       base                 >= 4.13     && < 4.14
                      , bytestring           >= 0.10.8.1 && < 0.11
                      , Cabal                >= 3.0      && < 3.1
                      , cabal-parsers        >= 0.1      && < 0.2
