@@ -3,5 +3,5 @@ packages: .
 source-repository-package
   type: git
   location: https://github.com/haskell-CI/haskell-ci
-  tag: 1e5d6138e51bfa90f03a33480ac8c71453153aa8
-  subdir: cabal-parsers
+  tag: 752a3aa2a9d9054a3d83eea7918b139db8f134d0
+  subdir: cabal-install-parsers
