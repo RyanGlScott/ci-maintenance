@@ -117,16 +117,6 @@ repos = OSet.fromList $ concat
     , "th-desugar"
     ]
 
-  , map (mkRepo "haskell")
-    [ "hsc2hs"
-    , "mtl"
-    , "parallel"
-    , "primitive"
-    , "stm"
-    , "unix"
-    -- , "vector"
-    ]
-
   , map (mkRepo "haskell-compat")
     [ "base-compat"
     , "base-orphans"
