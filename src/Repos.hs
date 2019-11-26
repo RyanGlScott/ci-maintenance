@@ -75,7 +75,7 @@ repos = OSet.fromList $ concat
     , "exceptions"
     , "folds"
     , "free"
-    -- , "gl"
+    , "gl"
     , "graphs"
     , "heaps"
     , "hybrid-vectors"
