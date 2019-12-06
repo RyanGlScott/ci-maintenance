@@ -164,6 +164,7 @@ repos = OSet.fromList $ concat
     , "singleton-gadts"
     , "text-show"
     , "text-show-instances"
+    , "th-lift"
     ]
 
   , map (mkRepo "scotty-web")
