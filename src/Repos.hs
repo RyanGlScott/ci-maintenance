@@ -133,7 +133,6 @@ repos = OSet.fromList $ concat
     , "javascript-bridge"
     , "kansas-comet"
     , "natural-transformation"
-    , "remote-monad"
     , "yampa-canvas"
     ]
   , [ Repo "ku-fpg" "blank-canvas" (OtherBranch "0.7") ]
