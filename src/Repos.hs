@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE NamedFieldPuns #-}
 module Repos where
 
@@ -12,12 +13,12 @@ data Repo = Repo
   { repoOwner  :: !String
   , repoName   :: !String
   , repoBranch :: !Branch
-  } deriving (Eq, Ord, Read, Show)
+  } deriving stock (Eq, Ord, Read, Show)
 
 data Branch
   = MasterBranch
   | OtherBranch !String
-  deriving (Eq, Ord, Read, Show)
+  deriving stock (Eq, Ord, Read, Show)
 
 mkRepo :: String -> String -> Repo
 mkRepo owner name =

@@ -1,3 +1,7 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
 module Main (main) where
 
@@ -15,12 +19,16 @@ import           Data.List.Extra hiding (for)
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
 import           Data.Maybe
+import           Data.Semigroup.Generic
 import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
+import           Data.Traversable
+import           Distribution.Fields.Pretty (PrettyField, showFields)
 import           Distribution.Pretty (prettyShow)
 import           Distribution.Text (display, simpleParse)
 import           Distribution.Types.PackageId (PackageIdentifier(..))
 import           Distribution.Version
+import           GHC.Generics (Generic)
 import           Options.Applicative
 import           System.Directory
 import           System.Exit
@@ -38,17 +46,19 @@ data Command
   | Commit !CommonOptions
   | Push !CommonOptions
   | Everything !OutdatedOptions !CommonOptions
+  | Projectify !CommonOptions
   | Clean
-  deriving (Eq, Show)
+  deriving stock (Eq, Show)
 
 newtype OutdatedOptions = OutdatedOptions
   { excludeDeps :: Maybe [String]
-  } deriving (Eq, Show)
+  } deriving newtype Eq
+    deriving stock   Show
 
 data CommonOptions = CommonOptions
   { includePackages :: Maybe [Pattern]
   , startAt         :: Maybe Pattern
-  } deriving (Eq, Show)
+  } deriving stock (Eq, Show)
 
 cmdParser :: Parser Command
 cmdParser = subparser
@@ -79,6 +89,9 @@ cmdParser = subparser
  <> command "everything"
       (info (everythingCommand <**> helper)
             (progDesc "Fully update each library"))
+ <> command "projectify"
+      (info (projectifyCommand <**> helper)
+            (progDesc "Create a cabal.project for the checkout directory"))
  <> command "clean"
       (info (pure Clean <**> helper)
             (progDesc "Clean working directory"))
@@ -117,6 +130,9 @@ pushCommand = Push <$> commonOptions
 
 everythingCommand :: Parser Command
 everythingCommand = Everything <$> outdatedOptions <*> commonOptions
+
+projectifyCommand :: Parser Command
+projectifyCommand = Projectify <$> commonOptions
 
 commonOptions :: Parser CommonOptions
 commonOptions = CommonOptions
@@ -158,20 +174,23 @@ main = execParser opts >>= travisMaintenance
 travisMaintenance :: Command -> IO ()
 travisMaintenance cmd =
   case cmd of
-    Pull cmmn             -> perPackageAction cmmn pull
-    Reset cmmn            -> perPackageAction cmmn reset
-    TestedWith cmmn       -> perPackageAction cmmn testedWith
-    Regenerate cmmn       -> perPackageAction cmmn regenerate
-    Diff cmmn             -> perPackageAction cmmn diff
-    Outdated outOpts cmmn -> perPackageAction cmmn (outdated outOpts)
-    Commit cmmn           -> perPackageAction cmmn commit
-    Push cmmn             -> perPackageAction cmmn push
+    Pull cmmn               -> perPackageAction_ cmmn pull
+    Reset cmmn              -> perPackageAction_ cmmn reset
+    TestedWith cmmn         -> perPackageAction_ cmmn testedWith
+    Regenerate cmmn         -> perPackageAction_ cmmn regenerate
+    Diff cmmn               -> perPackageAction_ cmmn diff
+    Outdated outOpts cmmn   -> perPackageAction_ cmmn (outdated outOpts)
+    Commit cmmn             -> perPackageAction_ cmmn commit
+    Push cmmn               -> perPackageAction_ cmmn push
+    Everything outOpts cmmn -> perPackageAction_ cmmn (everything outOpts)
 
-    Everything outOpts cmmn
-          -> perPackageAction cmmn (everything outOpts)
+    Projectify cmmn -> projectify cmmn
     Clean -> removeDirectoryRecursive =<< getCheckoutDir
 
-perPackageAction :: CommonOptions -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
+perPackageAction_ :: CommonOptions -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
+perPackageAction_ cmmn thing = void $ perPackageAction cmmn thing
+
+perPackageAction :: CommonOptions -> (RepoMetadata -> FilePath -> IO a) -> IO [a]
 perPackageAction CommonOptions{includePackages,startAt} thing =
   inCheckoutDir $ \dir -> do
     let repos' :: [Repo]
@@ -189,18 +208,20 @@ perPackageAction CommonOptions{includePackages,startAt} thing =
     for_ repos' $ \r -> putStrLn $ "~~     " ++ ppRepo r
     printBanner '~'
     putStrLn ""
-    for_ repos' $ \r -> do
+    for repos' $ \r -> do
       printBanner '='
       putStrLn $ "== " ++ ppRepo r
       printBanner '='
       let repoDir = dir </> repoFullSuffix r
       cloneRepo (repoURLSuffix r) repoDir (repoBranch r)
-      bracket_ (setCurrentDirectory repoDir)
-               (setCurrentDirectory dir *> putStrLn "")
-               (do let path = "cabal.project"
-                   contents <- BS.readFile path
-                   pf <- either (fail . renderParseError) pure $ parseProject path contents
-                   thing (RM r pf) repoDir)
+      res <- bracket_ (setCurrentDirectory repoDir)
+                      (setCurrentDirectory dir *> putStrLn "")
+                      (do let path = "cabal.project"
+                          contents <- BS.readFile path
+                          pf <- either (fail . renderParseError) pure $
+                                parseProject path contents
+                          thing (RM r pf) repoDir)
+      pure res
   where
     repoMatchesPattern :: Repo -> Pattern -> Bool
     repoMatchesPattern r p = p `match` repoFullSuffix r
@@ -403,6 +424,70 @@ everything outOpts r fp =
     , commit
     , push
     ]
+
+projectify :: CommonOptions -> IO ()
+projectify cmmn = do
+  cDir <- getCheckoutDir
+  projInfos <- perPackageAction cmmn (gatherProjectInfo cDir)
+  let project = displayProject $ mconcat projInfos
+  putStrLn project -- Print it out as a quick sanity check
+  TS.writeFile (cDir </> "cabal.project") $ TS.pack project
+  where
+    gatherProjectInfo :: FilePath -> RepoMetadata -> FilePath -> IO ProjectInfo
+    gatherProjectInfo cDir
+                      (RM _ Project{ prjPackages {- , prjOptPackages
+                                   , prjSourceRepos -} , prjOrigFields })
+                      fp =
+      let prefix    = makeRelative cDir fp
+          prepend p = normalise $ prefix </> p in
+      pure PI { piPackages    = map prepend prjPackages
+              {-
+              Somewhat surprisingly, the contents of prjOptPackages and
+              prjSourceRepos are already contained within prjOrigFields. It's
+              unclear to me if that is intended behavior, so I have inquired
+              about this peculiarity in
+              https://github.com/haskell-CI/haskell-ci/issues/367.
+              Until that is resolved, I will leave the code that deals with
+              prjOptPackages/prjSourceRepos commented out.
+              -}
+              -- , piOptPackages = map prepend prjOptPackages
+              -- , piSourceRepos = prjSourceRepos
+              , piOrigFields  = prjOrigFields
+              }
+
+    displayProject :: ProjectInfo -> String
+    displayProject (PI{ piPackages {- , piOptPackages
+                      , piSourceRepos -} , piOrigFields }) =
+      unlines
+        $ map ("packages: "          ++) piPackages
+       -- ++ map ("optional-packages: " ++) piOptPackages
+       -- ++ map displaySourceRepo piSourceRepos
+       ++ [showFields (const []) piOrigFields]
+
+    -- displaySourceRepo :: SourceRepositoryPackage Maybe -> String
+    -- displaySourceRepo (SourceRepositoryPackage{ srpType, srpLocation, srpTag
+    --                                           , srpBranch, srpSubdir }) =
+    --   unlines
+    --     [ "source-repository-package"
+    --     , "    type: "     ++ prettyShow srpType
+    --     , "    location: " ++ srpLocation
+    --     , displayMaybe srpTag    ("    tag: "    ++)
+    --     , displayMaybe srpBranch ("    branch: " ++)
+    --     , displayMaybe srpSubdir ("    subdir: " ++)
+    --     ]
+
+    -- displayMaybe :: Maybe a -> (a -> String) -> String
+    -- displayMaybe = flip foldMap
+
+-- The subset of cabal.project that we care about.
+data ProjectInfo = PI
+  { piPackages    :: [String]
+  -- , piOptPackages :: [String]
+  -- , piSourceRepos :: [SourceRepositoryPackage Maybe]
+  , piOrigFields  :: [PrettyField ()]
+  } deriving stock Generic
+    deriving (Semigroup, Monoid)
+             via GenericSemigroupMonoid ProjectInfo
 
 gitDiff :: IO String
 gitDiff = readProcess "git" [ "diff"
