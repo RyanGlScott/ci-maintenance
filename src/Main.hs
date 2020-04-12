@@ -335,7 +335,7 @@ regenerate _ _ = do
   let haskellCIDir = "../../../haskell-ci"
   cloneRepo "haskell-CI/haskell-ci" haskellCIDir MasterBranch
   haskellCIExe <- inDir haskellCIDir $ do
-    callProcess "cabal" [ "new-build", "exe:haskell-ci" ]
+    callProcess "cabal" [ "v2-build", "exe:haskell-ci" ]
     trim <$> readProcess "cabal-plan" [ "list-bin", "haskell-ci" ] ""
   callProcess haskellCIExe [ "regenerate" ]
 
@@ -344,7 +344,7 @@ diff _ _ = gitDiff >>= putStrLn
 
 outdated :: OutdatedOptions -> RepoMetadata -> FilePath -> IO ()
 outdated OutdatedOptions{excludeDeps} RM{rmRepo = Repo{repoName}} _ =
-  bracket_ (callProcess "cabal" [ "new-freeze" ])
+  bracket_ (callProcess "cabal" [ "v2-freeze" ])
            (removeFile "cabal.project.freeze")
            go
   where
@@ -361,7 +361,7 @@ outdated OutdatedOptions{excludeDeps} RM{rmRepo = Repo{repoName}} _ =
       (ec, stdout, _stderr)
         <- readProcessWithExitCode
            "cabal" [ "outdated"
-                   , "--new-freeze-file"
+                   , "--v2-freeze-file"
                    , "--exit-code"
                    , "--ignore=" ++ intercalate ","
                                     (  map (display . pkgName) globalPkgIds
