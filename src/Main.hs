@@ -35,6 +35,7 @@ import           System.Exit
 import           System.FilePath
 import           System.FilePath.Glob
 import           System.Process
+import           Text.Regex
 
 data Command
   = Pull !CommonOptions
@@ -287,53 +288,41 @@ testedWith (RM _ pf) fp = do
     cabalTestedVersionsHack = go
       where
         go :: String -> String
-        go [] = []
-        go ('G':'H':'C':    '=':'=':    primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
-          | tertiaryNum /= '*'
-          = "GHC==" ++ hackNum [primaryNum] [secondaryNum] ++ go rest
-        go ('G':'H':'C':    '=':'=':    primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
-          | tertiaryNum /= '*'
-          = "GHC==" ++ hackNum [primaryNum] [sn1, sn2] ++ go rest
-        go ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
-          | tertiaryNum /= '*'
-          = "GHC == " ++ hackNum [primaryNum] [secondaryNum] ++ go rest
-        go ('G':'H':'C':' ':'=':'=':' ':primaryNum:'.':sn1:sn2:     '.':tertiaryNum:rest)
-          | tertiaryNum /= '*'
-          = "GHC == " ++ hackNum [primaryNum] [sn1, sn2] ++ go rest
-        go ('|':'|':' ':'=':'=':primaryNum:'.':secondaryNum:'.':tertiaryNum:rest)
-          | tertiaryNum /= '*'
-          = "|| ==" ++ hackNum [primaryNum] [secondaryNum] ++ go rest
-        go ('|':'|':' ':'=':'=':primaryNum:'.':sn1:sn2:'.':tertiaryNum:rest)
-          | tertiaryNum /= '*'
-          = "|| ==" ++ hackNum [primaryNum] [sn1, sn2] ++ go rest
-        go (x:xs) = x:go xs
+        go s = case matchRegexAll re s of
+                 Just (before, _matched, after, groups)
+                   |  [ghc, primary, secondary, tertiary] <- groups
+                   ,  tertiary /= "*"
+                   -> before ++ ghc ++ hackNum primary secondary ++ go after
+                   |  otherwise
+                   -> error $ "cabalTestedVersionsHack.go: " ++ show groups
+                 Nothing -> s
 
         hackNum :: String -> String -> String
         hackNum prim sec = fst $ latestTestedWithFor prim sec
+
+        re :: Regex
+        re = mkRegex "(GHC == |GHC==|\\|\\| ==)([0-9]+)\\.([0-9]+)\\.([0-9]+)"
 
     appVeyorMatrixHack :: String -> String
     appVeyorMatrixHack = go
       where
         go :: String -> String
-        go [] = []
-        go ('G':'H':'C':'V':'E':'R':':':' ':'"'
-               :primaryNum:'.':secondaryNum:'.':_tertiaryNum:'"':rest)
-          = "GHCVER: \"" ++ hackNum [primaryNum] [secondaryNum] ++ "\"" ++ go rest
-        go ('G':'H':'C':'V':'E':'R':':':' ':'"'
-               :primaryNum:'.':sn1:sn2:'.':_tertiaryNum:'"':rest)
-          = "GHCVER: \"" ++ hackNum [primaryNum] [sn1,sn2] ++ "\"" ++ go rest
-        go ('G':'H':'C':'V':'E':'R':':':' ':'"'
-               :primaryNum:'.':secondaryNum:'.':_tertiaryNum:'.':_quaternaryNum:'"':rest)
-          = "GHCVER: \"" ++ hackNum [primaryNum] [secondaryNum] ++ "\"" ++ go rest
-        go ('G':'H':'C':'V':'E':'R':':':' ':'"'
-               :primaryNum:'.':sn1:sn2:'.':_tertiaryNum:'.':_quaternaryNum:'"':rest)
-          = "GHCVER: \"" ++ hackNum [primaryNum] [sn1,sn2] ++ "\"" ++ go rest
-        go (x:xs) = x:go xs
+        go s = case matchRegexAll re s of
+                 Just (before, _matched, after, groups)
+                   |  [primary, secondary, _tertiary, _quaternary] <- groups
+                   -> before ++ "GHCVER: \"" ++ hackNum primary secondary
+                                     ++ "\"" ++ go after
+                   |  otherwise
+                   -> error $ "appVeyorMatrixHack.go: " ++ show groups
+                 Nothing -> s
 
         hackNum :: String -> String -> String
         hackNum prim sec =
           case latestTestedWithFor prim sec of
             (maj, mbQuat) -> maj ++ maybe "" (\quat -> '.':show quat) mbQuat
+
+        re :: Regex
+        re = mkRegex "GHCVER: \"([0-9]+)\\.([0-9]+)\\.([0-9]+)(\\.[0-9]+)?\""
 
     latestTestedWithFor :: String -> String -> (String, Maybe Int)
     latestTestedWithFor prim sec =
