@@ -9,13 +9,14 @@ import           Repos
 
 import           Cabal.Parse
 import           Cabal.Project
+-- import           Cabal.SourceRepo
 import           Control.Exception
 import           Control.Monad
 import           Data.Bifunctor (Bifunctor(..))
 import qualified Data.ByteString.Char8 as BS
 import           Data.Char
 import           Data.Foldable
-import           Data.List.Extra hiding (for)
+import           Data.List.Extra
 import qualified Data.Map.Strict as Map
 import           Data.Map.Strict (Map)
 import           Data.Maybe
@@ -424,34 +425,30 @@ projectify cmmn = do
   where
     gatherProjectInfo :: FilePath -> RepoMetadata -> FilePath -> IO ProjectInfo
     gatherProjectInfo cDir
-                      (RM _ Project{ prjPackages {- , prjOptPackages
-                                   , prjSourceRepos -} , prjOrigFields })
+                      (RM _ Project{ prjPackages, prjOptPackages
+                                   , {-prjSourceRepos,-} prjOtherFields })
                       fp =
       let prefix    = makeRelative cDir fp
           prepend p = normalise $ prefix </> p in
       pure PI { piPackages    = map prepend prjPackages
-              {-
-              Somewhat surprisingly, the contents of prjOptPackages and
-              prjSourceRepos are already contained within prjOrigFields. It's
-              unclear to me if that is intended behavior, so I have inquired
-              about this peculiarity in
-              https://github.com/haskell-CI/haskell-ci/issues/367.
-              Until that is resolved, I will leave the code that deals with
-              prjOptPackages/prjSourceRepos commented out.
-              -}
-              -- , piOptPackages = map prepend prjOptPackages
+              , piOptPackages = map prepend prjOptPackages
               -- , piSourceRepos = prjSourceRepos
-              , piOrigFields  = prjOrigFields
+              , piOtherFields = prjOtherFields
               }
 
     displayProject :: ProjectInfo -> String
-    displayProject (PI{ piPackages {- , piOptPackages
-                      , piSourceRepos -} , piOrigFields }) =
+    displayProject (PI{ piPackages, piOptPackages
+                      , {-piSourceRepos,-} piOtherFields }) =
       unlines
         $ map ("packages: "          ++) piPackages
-       -- ++ map ("optional-packages: " ++) piOptPackages
+       ++ map ("optional-packages: " ++) piOptPackages
+       {-
+       Temporarily disabled since prjOtherFields contains a duplicate copy of
+       all source-repository-packages. See
+       https://github.com/haskell-CI/haskell-ci/pull/368#issuecomment-613419533.
+       -}
        -- ++ map displaySourceRepo piSourceRepos
-       ++ [showFields (const []) piOrigFields]
+       ++ [showFields (const []) piOtherFields]
 
     -- displaySourceRepo :: SourceRepositoryPackage Maybe -> String
     -- displaySourceRepo (SourceRepositoryPackage{ srpType, srpLocation, srpTag
@@ -471,9 +468,9 @@ projectify cmmn = do
 -- The subset of cabal.project that we care about.
 data ProjectInfo = PI
   { piPackages    :: [String]
-  -- , piOptPackages :: [String]
+  , piOptPackages :: [String]
   -- , piSourceRepos :: [SourceRepositoryPackage Maybe]
-  , piOrigFields  :: [PrettyField ()]
+  , piOtherFields :: [PrettyField ()]
   } deriving stock Generic
     deriving (Semigroup, Monoid)
              via GenericSemigroupMonoid ProjectInfo
