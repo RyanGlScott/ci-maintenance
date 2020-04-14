@@ -9,7 +9,7 @@ import           Repos
 
 import           Cabal.Parse
 import           Cabal.Project
--- import           Cabal.SourceRepo
+import           Cabal.SourceRepo
 import           Control.Exception
 import           Control.Monad
 import           Data.Bifunctor (Bifunctor(..))
@@ -426,50 +426,45 @@ projectify cmmn = do
     gatherProjectInfo :: FilePath -> RepoMetadata -> FilePath -> IO ProjectInfo
     gatherProjectInfo cDir
                       (RM _ Project{ prjPackages, prjOptPackages
-                                   , {-prjSourceRepos,-} prjOtherFields })
+                                   , prjSourceRepos, prjOtherFields })
                       fp =
       let prefix    = makeRelative cDir fp
           prepend p = normalise $ prefix </> p in
       pure PI { piPackages    = map prepend prjPackages
               , piOptPackages = map prepend prjOptPackages
-              -- , piSourceRepos = prjSourceRepos
+              , piSourceRepos = prjSourceRepos
               , piOtherFields = prjOtherFields
               }
 
     displayProject :: ProjectInfo -> String
     displayProject (PI{ piPackages, piOptPackages
-                      , {-piSourceRepos,-} piOtherFields }) =
+                      , piSourceRepos, piOtherFields }) =
       unlines
         $ map ("packages: "          ++) piPackages
        ++ map ("optional-packages: " ++) piOptPackages
-       {-
-       Temporarily disabled since prjOtherFields contains a duplicate copy of
-       all source-repository-packages. See
-       https://github.com/haskell-CI/haskell-ci/pull/368#issuecomment-613419533.
-       -}
-       -- ++ map displaySourceRepo piSourceRepos
+       ++ map displaySourceRepo piSourceRepos
        ++ [showFields (const []) piOtherFields]
 
-    -- displaySourceRepo :: SourceRepositoryPackage Maybe -> String
-    -- displaySourceRepo (SourceRepositoryPackage{ srpType, srpLocation, srpTag
-    --                                           , srpBranch, srpSubdir }) =
-    --   unlines
-    --     [ "source-repository-package"
-    --     , "    type: "     ++ prettyShow srpType
-    --     , "    location: " ++ srpLocation
-    --     , displayMaybe srpTag    ("    tag: "    ++)
-    --     , displayMaybe srpBranch ("    branch: " ++)
-    --     , displayMaybe srpSubdir ("    subdir: " ++)
-    --     ]
+    displaySourceRepo :: SourceRepositoryPackage Maybe -> String
+    displaySourceRepo (SourceRepositoryPackage{ srpType, srpLocation, srpTag
+                                              , srpBranch, srpSubdir }) =
+      unlines
+        [ "source-repository-package"
+        , "    type: "     ++ prettyShow srpType
+        , "    location: " ++ srpLocation
+        , displayMaybe srpTag    ("    tag: "    ++)
+        , displayMaybe srpBranch ("    branch: " ++)
+        , displayMaybe srpSubdir ("    subdir: " ++)
+        ]
 
-    -- displayMaybe :: Maybe a -> (a -> String) -> String
-    -- displayMaybe = flip foldMap
+    displayMaybe :: Maybe a -> (a -> String) -> String
+    displayMaybe = flip foldMap
 
 -- The subset of cabal.project that we care about.
 data ProjectInfo = PI
   { piPackages    :: [String]
   , piOptPackages :: [String]
-  -- , piSourceRepos :: [SourceRepositoryPackage Maybe]
+  , piSourceRepos :: [SourceRepositoryPackage Maybe]
   , piOtherFields :: [PrettyField ()]
   } deriving stock Generic
     deriving (Semigroup, Monoid)
