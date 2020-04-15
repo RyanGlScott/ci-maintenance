@@ -34,7 +34,7 @@ executable travis-maintenance
                      , optparse-applicative  >= 0.14     && < 0.16
                      , ordered-containers    >= 0.1      && < 0.3
                      , process               >= 1.6      && < 1.7
-                     , regex-compat          >= 0.95     && < 0.96
+                     , regex-tdfa            >= 1.3      && < 1.4
                      , semigroups            >= 0.19.1   && < 0.20
                      , split                 >= 0.2      && < 0.3
                      , text                  >= 1.2      && < 1.3

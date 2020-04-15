@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main (main) where
 
 import           Repos
@@ -36,7 +37,7 @@ import           System.Exit
 import           System.FilePath
 import           System.FilePath.Glob
 import           System.Process
-import           Text.Regex
+import           Text.Regex.TDFA (Regex, makeRegex, matchM)
 
 data Command
   = Pull !CommonOptions
@@ -289,8 +290,8 @@ testedWith (RM _ pf) fp = do
     cabalTestedVersionsHack = go
       where
         go :: String -> String
-        go s = case matchRegexAll re s of
-                 Just (before, _matched, after, groups)
+        go s = case matchM re s of
+                 Just (before, _matched :: String, after, groups)
                    |  [ghc, primary, secondary, tertiary] <- groups
                    ,  tertiary /= "*"
                    -> before ++ ghc ++ hackNum primary secondary ++ go after
@@ -302,14 +303,14 @@ testedWith (RM _ pf) fp = do
         hackNum prim sec = fst $ latestTestedWithFor prim sec
 
         re :: Regex
-        re = mkRegex "(GHC == |GHC==|\\|\\| ==)([0-9]+)\\.([0-9]+)\\.([0-9]+)"
+        re = makeRegex "(GHC == |GHC==|\\|\\| ==)([0-9]+)\\.([0-9]+)\\.([0-9]+)"
 
     appVeyorMatrixHack :: String -> String
     appVeyorMatrixHack = go
       where
         go :: String -> String
-        go s = case matchRegexAll re s of
-                 Just (before, _matched, after, groups)
+        go s = case matchM re s of
+                 Just (before, _matched :: String, after, groups)
                    |  [primary, secondary, _tertiary, _quaternary] <- groups
                    -> before ++ "GHCVER: \"" ++ hackNum primary secondary
                                      ++ "\"" ++ go after
@@ -323,7 +324,7 @@ testedWith (RM _ pf) fp = do
             (maj, mbQuat) -> maj ++ maybe "" (\quat -> '.':show quat) mbQuat
 
         re :: Regex
-        re = mkRegex "GHCVER: \"([0-9]+)\\.([0-9]+)\\.([0-9]+)(\\.[0-9]+)?\""
+        re = makeRegex "GHCVER: \"([0-9]+)\\.([0-9]+)\\.([0-9]+)(\\.[0-9]+)?\""
 
     latestTestedWithFor :: String -> String -> (String, Maybe Int)
     latestTestedWithFor prim sec =
