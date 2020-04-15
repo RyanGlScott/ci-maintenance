@@ -265,20 +265,22 @@ reset _ _  = do
 
 testedWith :: RepoMetadata -> FilePath -> IO ()
 testedWith (RM _ pf) fp = do
-  for_ (prjPackages pf) $ \package -> do
+  for_ (prjPackages pf ++ prjOptPackages pf) $ \package -> do
     let cabalFileDir = fp </> package
-    cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
-                  listDirectory cabalFileDir
-    appVeyorYmlFiles <- filter (== "appveyor.yml") <$>
-                        listDirectory cabalFileDir
-    case appVeyorYmlFiles of
-      [appVeyorYmlFile] -> replaceTestedWith appVeyorMatrixHack
-                                             (cabalFileDir </> appVeyorYmlFile)
-      _                 -> pure ()
-    case cabalFiles of
-      [cabalFile] -> replaceTestedWith cabalTestedVersionsHack
-                                       (cabalFileDir </> cabalFile)
-      _           -> fail $ show cabalFiles
+    exists <- doesDirectoryExist cabalFileDir
+    when exists $ do
+      cabalFiles <- filter (\f -> takeExtension f == ".cabal") <$>
+                    listDirectory cabalFileDir
+      appVeyorYmlFiles <- filter (== "appveyor.yml") <$>
+                          listDirectory cabalFileDir
+      case appVeyorYmlFiles of
+        [appVeyorYmlFile] -> replaceTestedWith appVeyorMatrixHack
+                                               (cabalFileDir </> appVeyorYmlFile)
+        _                 -> pure ()
+      case cabalFiles of
+        [cabalFile] -> replaceTestedWith cabalTestedVersionsHack
+                                         (cabalFileDir </> cabalFile)
+        _           -> fail $ show cabalFiles
   where
     replaceTestedWith :: (String -> String) -> FilePath -> IO ()
     replaceTestedWith hack filePath = do
