@@ -123,7 +123,7 @@ repos = OSet.fromList $ concat
     , "base-orphans"
     , "deriving-compat"
     , "mtl-compat"
-    , "th-quote"
+    , "th-compat"
     ]
 
   , map (mkRepo "ku-fpg")
