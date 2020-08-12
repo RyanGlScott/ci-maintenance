@@ -521,8 +521,8 @@ supportedGhcVersions =
   , (("8","2"),  ([8,2,2],  Nothing))
   , (("8","4"),  ([8,4,4],  Nothing))
   , (("8","6"),  ([8,6,5],  Nothing))
-  , (("8","8"),  ([8,8,3],  Nothing))
-  , (("8","10"), ([8,10,1], Nothing))
+  , (("8","8"),  ([8,8,4],  Nothing))
+  , (("8","10"), ([8,10,2], Nothing))
   ]
 
 printBanner :: Char -> IO ()
