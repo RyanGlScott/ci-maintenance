@@ -175,10 +175,10 @@ repos = OSet.fromList $ concat
 
   -- Miscellaneous
   , [ mkRepo "AndrasKovacs" "singleton-nats"
-    , mkRepo "bos" "criterion"
     , mkRepo "dreixel" "generic-deriving"
     , mkRepo "foxik" "hashmap"
     , mkRepo "glguy" "th-abstraction"
+    , mkRepo "haskell" "criterion"
     , mkRepo "lens" "lens-aeson"
     -- , mkRepo "lpsmith" "bytestring-builder"
     , mkRepo "mgsloan" "th-orphans"
