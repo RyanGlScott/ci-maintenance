@@ -76,7 +76,7 @@ cmdParser = subparser
             (progDesc "Updated tested-with stanzas"))
  <> command "regenerate"
       (info (regenerateCommand <**> helper)
-            (progDesc "Regenerate .travis.yml"))
+            (progDesc "Regenerate CI-related YAML files"))
  <> command "diff"
       (info (diffCommand <**> helper)
             (progDesc "Show the changes"))
@@ -165,17 +165,17 @@ splitAtElement x l =
                 in esx : splitAtElement x esxs
 
 main :: IO ()
-main = execParser opts >>= travisMaintenance
+main = execParser opts >>= ciMaintenance
   where
     opts = info (cmdParser <**> helper)
       ( fullDesc
      <> progDesc spiel
      <> header spiel )
 
-    spiel = "Make maintaining .travis.yml files somewhat easier"
+    spiel = "Make maintaining CI-related YAML files somewhat easier"
 
-travisMaintenance :: Command -> IO ()
-travisMaintenance cmd =
+ciMaintenance :: Command -> IO ()
+ciMaintenance cmd =
   case cmd of
     Pull cmmn               -> perPackageAction_ cmmn pull
     Reset cmmn              -> perPackageAction_ cmmn reset
@@ -206,7 +206,7 @@ perPackageAction CommonOptions{includePackages,startAt} thing =
       putStrLn ""
       exitFailure
     printBanner '~'
-    putStrLn $ "~~ travis-maintenace will look at the following repos:"
+    putStrLn $ "~~ ci-maintenace will look at the following repos:"
     putStrLn "~~"
     for_ repos' $ \r -> putStrLn $ "~~     " ++ ppRepo r
     printBanner '~'
@@ -479,12 +479,12 @@ gitDiff = readProcess "git" [ "diff"
                             ] ""
 
 commitTitle :: String
-commitTitle = "Regenerate .travis.yml"
+commitTitle = "Regenerate CI-related YAML files"
 
 commitDescription :: String
 commitDescription = unlines
   [ "This commit was performed automatically by a script."
-  , "https://github.com/RyanGlScott/travis-maintenance"
+  , "https://github.com/RyanGlScott/ci-maintenance"
   ]
 
 inCheckoutDir :: (FilePath -> IO a) -> IO a

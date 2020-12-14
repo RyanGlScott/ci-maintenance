@@ -1,10 +1,10 @@
 cabal-version:       2.2
-name:                travis-maintenance
+name:                ci-maintenance
 version:             0.1
-synopsis:            Miscellaneous hacks I use to maintain projects with .travis.yml scripts
-description:         Miscellaneous hacks I use to maintain projects with .travis.yml scripts.
-homepage:            https://github.com/RyanGlScott/travis-maintenance
-bug-reports:         https://github.com/RyanGlScott/travis-maintenance/issues
+synopsis:            Miscellaneous hacks I use to maintain projects with CI scripts
+description:         Miscellaneous hacks I use to maintain projects with CI scripts.
+homepage:            https://github.com/RyanGlScott/ci-maintenance
+bug-reports:         https://github.com/RyanGlScott/ci-maintenance/issues
 license:             GPL-3.0-or-later
 license-file:        LICENSE
 author:              Ryan Scott
@@ -17,9 +17,9 @@ extra-source-files:  CHANGELOG.md, README.md
 
 source-repository head
   type:     git
-  location: https://github.com/RyanGlScott/travis-maintenance.git
+  location: https://github.com/RyanGlScott/ci-maintenance.git
 
-executable travis-maintenance
+executable ci-maintenance
   main-is:             Main.hs
   other-modules:       Repos
   build-depends:       base                  >= 4.14     && < 4.15
