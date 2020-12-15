@@ -169,8 +169,7 @@ repos = OSet.fromList $ concat
     ]
 
   , map (mkRepo "scotty-web")
-    [ "scotty"
-    , "wai-middleware-static"
+    [ "wai-middleware-static"
     ]
 
   -- Miscellaneous
