@@ -126,6 +126,12 @@ repos = OSet.fromList $ concat
     , "th-compat"
     ]
 
+  {-
+  , map (mkRepo "haskellari")
+    [ "cabal-doctest"
+    ]
+  -}
+
   , map (mkRepo "ku-fpg")
     [ "blank-canvas"
     , "data-reify"
@@ -137,13 +143,6 @@ repos = OSet.fromList $ concat
     , "yampa-canvas"
     ]
   , [ Repo "ku-fpg" "blank-canvas" (OtherBranch "0.7") ]
-
-  {-
-  , map (mkRepo "phadej")
-    [ "cabal-doctest"
-    , "type-equality"
-    ]
-  -}
 
   , map (mkRepo "rrnewton")
     [ -- "atomic-primops"
@@ -178,6 +177,7 @@ repos = OSet.fromList $ concat
     , mkRepo "foxik" "hashmap"
     , mkRepo "glguy" "th-abstraction"
     , mkRepo "haskell" "criterion"
+    -- , mkRepo "hesselink" "type-equality"
     , mkRepo "lens" "lens-aeson"
     -- , mkRepo "lpsmith" "bytestring-builder"
     , mkRepo "mgsloan" "th-orphans"
