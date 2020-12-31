@@ -177,6 +177,7 @@ repos = OSet.fromList $ concat
     , mkRepo "foxik" "hashmap"
     , mkRepo "glguy" "th-abstraction"
     , mkRepo "haskell" "criterion"
+    -- , mkRepo "haskell-opengl" "StateVar"
     -- , mkRepo "hesselink" "type-equality"
     , mkRepo "lens" "lens-aeson"
     -- , mkRepo "lpsmith" "bytestring-builder"
