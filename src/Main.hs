@@ -338,7 +338,7 @@ regenerate :: RepoMetadata -> FilePath -> IO ()
 regenerate _ _ = do
   let haskellCIDir = "../../../haskell-ci"
   cloneRepo "haskell-CI/haskell-ci" haskellCIDir MasterBranch
-  haskellCIExe <- inDir haskellCIDir $ do
+  haskellCIExe <- withCurrentDirectory haskellCIDir $ do
     callProcess "cabal" [ "v2-build", "exe:haskell-ci" ]
     trim <$> readProcess "cabal-plan" [ "list-bin", "haskell-ci" ] ""
   callProcess haskellCIExe [ "regenerate" ]
@@ -491,14 +491,7 @@ inCheckoutDir :: (FilePath -> IO a) -> IO a
 inCheckoutDir thing = do
   checkoutDir <- getCheckoutDir
   createDirectoryIfMissing True checkoutDir
-  inDir checkoutDir (thing checkoutDir)
-
-inDir :: FilePath -> IO a -> IO a
-inDir dir thing = do
-  cwd <- getCurrentDirectory
-  bracket_ (setCurrentDirectory dir)
-           (setCurrentDirectory cwd)
-           thing
+  withCurrentDirectory checkoutDir (thing checkoutDir)
 
 getCheckoutDir :: IO FilePath
 getCheckoutDir = do
