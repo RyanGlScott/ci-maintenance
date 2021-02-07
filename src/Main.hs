@@ -26,6 +26,8 @@ import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
 import           Data.Traversable
 import           Distribution.Fields.Pretty (PrettyField, showFields)
+import qualified Distribution.Package as Pkg
+import           Distribution.PackageDescription (package, packageDescription)
 import           Distribution.Pretty (prettyShow)
 import           Distribution.Text (display, simpleParse)
 import           Distribution.Types.PackageId (PackageIdentifier(..))
@@ -49,12 +51,17 @@ data Command
   | Commit !CommonOptions
   | Push !CommonOptions
   | Everything !OutdatedOptions !CommonOptions
-  | Projectify !CommonOptions
+  | Projectify !ProjectifyOptions !CommonOptions
   | Clean
   deriving stock (Eq, Show)
 
 newtype OutdatedOptions = OutdatedOptions
   { excludeDeps :: Maybe [String]
+  } deriving newtype Eq
+    deriving stock   Show
+
+newtype ProjectifyOptions = ProjectifyOptions
+  { wError :: Bool
   } deriving newtype Eq
     deriving stock   Show
 
@@ -135,7 +142,14 @@ everythingCommand :: Parser Command
 everythingCommand = Everything <$> outdatedOptions <*> commonOptions
 
 projectifyCommand :: Parser Command
-projectifyCommand = Projectify <$> commonOptions
+projectifyCommand = Projectify <$> projectifyOptions <*> commonOptions
+
+projectifyOptions :: Parser ProjectifyOptions
+projectifyOptions = ProjectifyOptions
+  <$> switch
+      (  long "Werror"
+      <> help "Enable -Werror for each local package"
+      )
 
 commonOptions :: Parser CommonOptions
 commonOptions = CommonOptions
@@ -187,7 +201,7 @@ ciMaintenance cmd =
     Push cmmn               -> perPackageAction_ cmmn push
     Everything outOpts cmmn -> perPackageAction_ cmmn (everything outOpts)
 
-    Projectify cmmn -> projectify cmmn
+    Projectify projOpts cmmn -> projectify cmmn projOpts
     Clean -> removeDirectoryRecursive =<< getCheckoutDir
 
 perPackageAction_ :: CommonOptions -> (RepoMetadata -> FilePath -> IO ()) -> IO ()
@@ -418,8 +432,8 @@ everything outOpts r fp =
     , push
     ]
 
-projectify :: CommonOptions -> IO ()
-projectify cmmn = do
+projectify :: CommonOptions -> ProjectifyOptions -> IO ()
+projectify cmmn ProjectifyOptions{wError} = do
   cDir <- getCheckoutDir
   projInfos <- perPackageAction cmmn (gatherProjectInfo cDir)
   let project = displayProject $ mconcat projInfos
@@ -428,23 +442,35 @@ projectify cmmn = do
   where
     gatherProjectInfo :: FilePath -> RepoMetadata -> FilePath -> IO ProjectInfo
     gatherProjectInfo cDir
-                      (RM _ Project{ prjPackages, prjOptPackages
-                                   , prjSourceRepos, prjOtherFields })
-                      fp =
-      let prefix    = makeRelative cDir fp
-          prepend p = normalise $ prefix </> p in
-      pure PI { piPackages    = map prepend prjPackages
-              , piOptPackages = map prepend prjOptPackages
-              , piSourceRepos = prjSourceRepos
-              , piOtherFields = prjOtherFields
+                      (RM _ prj@Project{ prjPackages, prjOptPackages
+                                       , prjSourceRepos, prjOtherFields })
+                      fp = do
+      rslvPrj_either    <- resolveProject (fp </> "cabal.project") prj
+      rslvPrj           <- either (fail . renderResolveError) pure rslvPrj_either
+      cabalFiles_either <- readPackagesOfProject rslvPrj
+      Project{prjPackages = cabalFiles}
+                        <- either (fail . renderParseError) pure cabalFiles_either
+
+      let pkgNameOf (_, gpd) = display $ Pkg.pkgName $ package $ packageDescription gpd
+
+          prefix    = makeRelative cDir fp
+          prepend p = normalise $ prefix </> p
+      pure PI { piPackages     = map prepend prjPackages
+              , piOptPackages  = map prepend prjOptPackages
+              , piPackageNames = map pkgNameOf cabalFiles
+              , piSourceRepos  = prjSourceRepos
+              , piOtherFields  = prjOtherFields
               }
 
     displayProject :: ProjectInfo -> String
-    displayProject (PI{ piPackages, piOptPackages
+    displayProject (PI{ piPackages, piOptPackages, piPackageNames
                       , piSourceRepos, piOtherFields }) =
       unlines
         $ map ("packages: "          ++) piPackages
        ++ map ("optional-packages: " ++) piOptPackages
+       ++ [ "package " ++ pkgName ++ "\n  ghc-options: -Werror"
+          | wError, pkgName <- piPackageNames
+          ]
        ++ map displaySourceRepo piSourceRepos
        ++ [showFields (const []) piOtherFields]
 
@@ -465,10 +491,11 @@ projectify cmmn = do
 
 -- The subset of cabal.project that we care about.
 data ProjectInfo = PI
-  { piPackages    :: [String]
-  , piOptPackages :: [String]
-  , piSourceRepos :: [SourceRepositoryPackage Maybe]
-  , piOtherFields :: [PrettyField ()]
+  { piPackages     :: [String]
+  , piOptPackages  :: [String]
+  , piPackageNames :: [String]
+  , piSourceRepos  :: [SourceRepositoryPackage Maybe]
+  , piOtherFields  :: [PrettyField ()]
   } deriving stock Generic
     deriving (Semigroup, Monoid)
              via GenericSemigroupMonoid ProjectInfo
