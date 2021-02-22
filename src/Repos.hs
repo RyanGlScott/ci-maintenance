@@ -101,7 +101,6 @@ repos = OSet.fromList $ concat
     , "profunctors"
     -- , "promises"
     , "rcu"
-    , "recursion-schemes"
     , "reducers"
     , "reflection"
     , "semigroupoids"
@@ -188,5 +187,6 @@ repos = OSet.fromList $ concat
     -- , mkRepo "lpsmith" "bytestring-builder"
     , mkRepo "mgsloan" "th-orphans"
     , mkRepo "nfrisby" "invariant-functors"
+    , mkRepo "recursion-schemes" "recursion-schemes"
     ]
   ]
