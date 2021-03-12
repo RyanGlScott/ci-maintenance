@@ -177,6 +177,7 @@ repos = OSet.fromList $ concat
 
   -- Miscellaneous
   , [ mkRepo "AndrasKovacs" "singleton-nats"
+    , mkRepo "DanielSchuessler" "th-expand-syns"
     , mkRepo "dreixel" "generic-deriving"
     , mkRepo "foxik" "hashmap"
     , mkRepo "glguy" "th-abstraction"
