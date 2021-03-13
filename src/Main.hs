@@ -354,7 +354,7 @@ regenerate _ _ = do
   cloneRepo "haskell-CI/haskell-ci" haskellCIDir MasterBranch
   haskellCIExe <- withCurrentDirectory haskellCIDir $ do
     callProcess "cabal" [ "v2-build", "exe:haskell-ci" ]
-    trim <$> readProcess "cabal-plan" [ "list-bin", "haskell-ci" ] ""
+    trim <$> readProcess "cabal" [ "list-bin", "haskell-ci" ] ""
   callProcess haskellCIExe [ "regenerate" ]
 
 diff :: RepoMetadata -> FilePath -> IO ()
