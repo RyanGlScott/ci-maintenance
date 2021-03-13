@@ -1,1 +1,4 @@
 packages: .
+
+allow-newer:
+  cryptohash-sha256:base
