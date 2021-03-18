@@ -188,6 +188,6 @@ repos = OSet.fromList $ concat
     -- , mkRepo "lpsmith" "bytestring-builder"
     , mkRepo "mgsloan" "th-orphans"
     , mkRepo "nfrisby" "invariant-functors"
-    , mkRepo "recursion-schemes" "recursion-schemes"
+    -- , mkRepo "recursion-schemes" "recursion-schemes"
     ]
   ]
