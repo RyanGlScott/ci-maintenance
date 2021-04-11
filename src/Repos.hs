@@ -16,12 +16,20 @@ data Repo = Repo
   } deriving stock (Eq, Ord, Read, Show)
 
 data Branch
-  = MasterBranch
+  = MainBranch
+  | MasterBranch
   | OtherBranch !String
   deriving stock (Eq, Ord, Read, Show)
 
-mkRepo :: String -> String -> Repo
-mkRepo owner name =
+mkRepoMain :: String -> String -> Repo
+mkRepoMain owner name =
+  Repo{ repoOwner  = owner
+      , repoName   = name
+      , repoBranch = MainBranch
+      }
+
+mkRepoMaster :: String -> String -> Repo
+mkRepoMaster owner name =
   Repo{ repoOwner  = owner
       , repoName   = name
       , repoBranch = MasterBranch
@@ -37,10 +45,12 @@ repoFullSuffix :: Repo -> FilePath
 repoFullSuffix r =
   let urlSuffix = repoURLSuffix r in
   case repoBranch r of
+    MainBranch    -> urlSuffix
     MasterBranch  -> urlSuffix
     OtherBranch _ -> urlSuffix ++ "-" ++ branchName (repoBranch r)
 
 branchName :: Branch -> String
+branchName MainBranch         = "main"
 branchName MasterBranch       = "master"
 branchName (OtherBranch name) = name
 
@@ -56,21 +66,17 @@ data Component = Component
 
 repos :: OSet Repo
 repos = OSet.fromList $ concat
-  [ map (mkRepo "ekmett")
+  [ map (mkRepoMaster "ekmett")
     [ "ad"
     , "adjunctions"
     , "approximate"
-    , "bifunctors"
     , "bits"
     , "bound"
     , "bytes"
     , "charset"
-    , "comonad"
     , "compensated"
-    , "constraints"
     , "contravariant"
     -- , "discrimination"
-    , "distributive"
     , "either"
     , "eq"
     , "ersatz"
@@ -98,7 +104,6 @@ repos = OSet.fromList $ concat
     , "nats"
     , "parsers"
     , "pointed"
-    , "profunctors"
     -- , "promises"
     , "rcu"
     , "reducers"
@@ -116,13 +121,20 @@ repos = OSet.fromList $ concat
     , "void"
     , "zippers"
     ]
+  , map (mkRepoMain "ekmett")
+    [ "bifunctors"
+    , "comonad"
+    , "constraints"
+    , "distributive"
+    , "profunctors"
+    ]
 
-  , map (mkRepo "goldfirere")
+  , map (mkRepoMaster "goldfirere")
     [ "singletons"
     , "th-desugar"
     ]
 
-  , map (mkRepo "haskell-compat")
+  , map (mkRepoMaster "haskell-compat")
     [ "base-compat"
     , "base-orphans"
     , "deriving-compat"
@@ -131,12 +143,12 @@ repos = OSet.fromList $ concat
     ]
 
   {-
-  , map (mkRepo "haskellari")
+  , map (mkRepoMaster "haskellari")
     [ "cabal-doctest"
     ]
   -}
 
-  , map (mkRepo "ku-fpg")
+  , map (mkRepoMaster "ku-fpg")
     [ "blank-canvas"
     , "data-reify"
     , "dotgen"
@@ -148,13 +160,13 @@ repos = OSet.fromList $ concat
     ]
   , [ Repo "ku-fpg" "blank-canvas" (OtherBranch "0.7") ]
 
-  , map (mkRepo "rrnewton")
+  , map (mkRepoMaster "rrnewton")
     [ -- "atomic-primops"
       "criterion-external"
     , "thread-local-storage"
     ]
 
-  , map (mkRepo "RyanGlScott")
+  , map (mkRepoMaster "RyanGlScott")
     [ "code-page"
     , "constraint-tuples"
     , "echo"
@@ -171,23 +183,23 @@ repos = OSet.fromList $ concat
     , "th-lift"
     ]
 
-  , map (mkRepo "scotty-web")
+  , map (mkRepoMaster "scotty-web")
     [ "wai-middleware-static"
     ]
 
   -- Miscellaneous
-  , [ mkRepo "AndrasKovacs" "singleton-nats"
-    , mkRepo "DanielSchuessler" "th-expand-syns"
-    , mkRepo "dreixel" "generic-deriving"
-    , mkRepo "foxik" "hashmap"
-    , mkRepo "glguy" "th-abstraction"
-    , mkRepo "haskell" "criterion"
-    -- , mkRepo "haskell-opengl" "StateVar"
-    -- , mkRepo "hesselink" "type-equality"
-    , mkRepo "lens" "lens-aeson"
-    -- , mkRepo "lpsmith" "bytestring-builder"
-    , mkRepo "mgsloan" "th-orphans"
-    , mkRepo "nfrisby" "invariant-functors"
-    -- , mkRepo "recursion-schemes" "recursion-schemes"
+  , [ mkRepoMaster "AndrasKovacs" "singleton-nats"
+    , mkRepoMaster "DanielSchuessler" "th-expand-syns"
+    , mkRepoMaster "dreixel" "generic-deriving"
+    , mkRepoMaster "foxik" "hashmap"
+    , mkRepoMaster "glguy" "th-abstraction"
+    , mkRepoMaster "haskell" "criterion"
+    -- , mkRepoMaster "haskell-opengl" "StateVar"
+    -- , mkRepoMaster "hesselink" "type-equality"
+    , mkRepoMaster "lens" "lens-aeson"
+    -- , mkRepoMaster "lpsmith" "bytestring-builder"
+    , mkRepoMaster "mgsloan" "th-orphans"
+    , mkRepoMaster "nfrisby" "invariant-functors"
+    -- , mkRepoMaster "recursion-schemes" "recursion-schemes"
     ]
   ]
