@@ -75,7 +75,6 @@ repos = OSet.fromList $ concat
     , "bytes"
     , "charset"
     , "compensated"
-    , "contravariant"
     -- , "discrimination"
     , "either"
     , "eq"
@@ -125,6 +124,7 @@ repos = OSet.fromList $ concat
     [ "bifunctors"
     , "comonad"
     , "constraints"
+    , "contravariant"
     , "distributive"
     , "profunctors"
     ]
