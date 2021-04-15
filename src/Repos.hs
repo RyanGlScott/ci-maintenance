@@ -35,6 +35,13 @@ mkRepoMaster owner name =
       , repoBranch = MasterBranch
       }
 
+mkRepoOther :: String -> (String, String) -> Repo
+mkRepoOther owner (name, branch) =
+  Repo{ repoOwner  = owner
+      , repoName   = name
+      , repoBranch = OtherBranch branch
+      }
+
 ppRepo :: Repo -> String
 ppRepo r = repoURLSuffix r ++ " (" ++ branchName (repoBranch r) ++ " branch)"
 
@@ -127,6 +134,9 @@ repos = OSet.fromList $ concat
     , "contravariant"
     , "distributive"
     , "profunctors"
+    ]
+  , map (mkRepoOther "ekmett")
+    [ ("bifunctors", "5")
     ]
 
   , map (mkRepoMaster "goldfirere")
