@@ -156,6 +156,9 @@ repos = OSet.fromList $ concat
     , "mtl-compat"
     , "th-compat"
     ]
+  , map (mkRepoMain "haskell-compat")
+    [ "ghc-bignum-orphans"
+    ]
 
   {-
   , map (mkRepoMaster "haskellari")
