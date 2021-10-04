@@ -141,7 +141,6 @@ repos = OSet.fromList $ concat
     , ("contravariant", "1.5")
     , ("distributive",  "0")
     , ("profunctors",   "5")
-    , ("semigroupoids", "5.3")
     ]
 
   , map (mkRepoMaster "goldfirere")
