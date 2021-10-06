@@ -177,6 +177,11 @@ repos = OSet.fromList $ concat
     ]
   , [ Repo "ku-fpg" "blank-canvas" (OtherBranch "0.7") ]
 
+  , map (mkRepoMaster "mgsloan")
+    [ "th-orphans"
+    , "th-reify-many"
+    ]
+
   , map (mkRepoMaster "rrnewton")
     [ -- "atomic-primops"
       "criterion-external"
@@ -215,7 +220,6 @@ repos = OSet.fromList $ concat
     -- , mkRepoMaster "hesselink" "type-equality"
     , mkRepoMaster "lens" "lens-aeson"
     -- , mkRepoMaster "lpsmith" "bytestring-builder"
-    , mkRepoMaster "mgsloan" "th-orphans"
     , mkRepoMaster "nfrisby" "invariant-functors"
     -- , mkRepoMaster "recursion-schemes" "recursion-schemes"
     ]
