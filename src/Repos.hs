@@ -138,6 +138,7 @@ repos = OSet.fromList $ concat
   , map (mkRepoOther "ekmett")
     [ ("bifunctors",    "5")
     , ("comonad",       "5")
+    , ("constraints",   "0.13")
     , ("contravariant", "1.5")
     , ("distributive",  "0")
     , ("profunctors",   "5")
