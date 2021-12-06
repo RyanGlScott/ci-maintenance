@@ -206,6 +206,7 @@ repos = OSet.fromList $ concat
     , "text-show-instances"
     , "th-lift"
     ]
+  , [ Repo "RyanGlScott" "submods-to-source-repos" MainBranch ]
 
   , map (mkRepoMaster "scotty-web")
     [ "wai-middleware-static"
