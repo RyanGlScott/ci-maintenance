@@ -25,7 +25,7 @@ import           Data.Semigroup.Generic
 import qualified Data.Text as TS
 import qualified Data.Text.IO as TS
 import           Data.Traversable
-import           Distribution.Fields.Pretty (PrettyField, showFields)
+import           Distribution.Fields.Pretty (CommentPosition(..), PrettyField, showFields)
 import qualified Distribution.Package as Pkg
 import           Distribution.PackageDescription (package, packageDescription)
 import           Distribution.Pretty (prettyShow)
@@ -472,7 +472,7 @@ projectify cmmn ProjectifyOptions{wError} = do
           | wError, pkgName <- piPackageNames
           ]
        ++ map displaySourceRepo piSourceRepos
-       ++ [showFields (const []) piOtherFields]
+       ++ [showFields (const NoComment) piOtherFields]
 
     displaySourceRepo :: SourceRepositoryPackage Maybe -> String
     displaySourceRepo (SourceRepositoryPackage{ srpType, srpLocation, srpTag
