@@ -153,14 +153,14 @@ repos = OSet.fromList $ concat
   , map (mkRepoMaster "haskell-compat")
     [ "base-compat"
     , "base-orphans"
-    , "bifunctor-classes-compat"
     , "deriving-compat"
     , "foldable1-classes-compat"
     , "mtl-compat"
     , "th-compat"
     ]
   , map (mkRepoMain "haskell-compat")
-    [ "ghc-bignum-orphans"
+    [ "bifunctor-classes-compat"
+    , "ghc-bignum-orphans"
     ]
 
   {-
