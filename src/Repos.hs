@@ -139,7 +139,6 @@ repos = OSet.fromList $ concat
     [ ("adjunctions",   "4.4")
     , ("bifunctors",    "5")
     , ("comonad",       "5")
-    , ("constraints",   "0.13")
     , ("contravariant", "1.5")
     , ("distributive",  "0")
     , ("profunctors",   "5")
