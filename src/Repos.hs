@@ -91,7 +91,7 @@ repos = OSet.fromList $ concat
     , "free"
     , "gl"
     , "graphs"
-    -- , "half"
+    , "half"
     -- , "hash"
     , "heaps"
     , "hybrid-vectors"
