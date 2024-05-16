@@ -154,6 +154,7 @@ repos = OSet.fromList $ concat
     , "base-orphans"
     , "deriving-compat"
     , "foldable1-classes-compat"
+    , "generically"
     , "mtl-compat"
     , "th-compat"
     ]
