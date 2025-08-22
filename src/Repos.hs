@@ -122,7 +122,7 @@ repos = OSet.fromList $ concat
     , "tagged"
     , "transformers-compat"
     , "trifecta"
-    -- , "unique"
+    , "unique"
     , "vector-instances"
     , "void"
     , "zippers"
