@@ -82,7 +82,7 @@ repos = OSet.fromList $ concat
     , "bytes"
     , "charset"
     , "compensated"
-    -- , "discrimination"
+    , "discrimination"
     , "either"
     , "eq"
     , "ersatz"
