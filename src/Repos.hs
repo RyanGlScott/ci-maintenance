@@ -227,5 +227,6 @@ repos = OSet.fromList $ concat
     -- , mkRepoMaster "lpsmith" "bytestring-builder"
     , mkRepoMaster "nfrisby" "invariant-functors"
     -- , mkRepoMaster "recursion-schemes" "recursion-schemes"
+    , mkRepoMaster "remiturk" "libffi"
     ]
   ]
