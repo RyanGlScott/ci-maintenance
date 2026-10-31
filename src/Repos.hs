@@ -217,6 +217,7 @@ repos = OSet.fromList $ concat
   -- Miscellaneous
   , [ mkRepoMaster "AndrasKovacs" "singleton-nats"
     , mkRepoMaster "DanielSchuessler" "th-expand-syns"
+    , mkRepoMaster "dmwit" "ordered-containers"
     , mkRepoMaster "dreixel" "generic-deriving"
     , mkRepoMaster "foxik" "hashmap"
     , mkRepoMaster "glguy" "th-abstraction"
